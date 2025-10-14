@@ -1,0 +1,31 @@
+[package]
+name = "prism3-concurrent"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = ["Hu Haixing <starfish.hu@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/3-prism/prism3-rust-concurrent"
+description = "Concurrent utilities library providing thread pools, task scheduling, synchronization primitives and other concurrent programming tools"
+homepage = "https://github.com/3-prism/prism3-rust-concurrent"
+documentation = "https://docs.rs/prism3-concurrent"
+readme = "README.md"
+keywords = ["concurrent", "async", "lock", "mutex", "rwlock"]
+categories = ["concurrency", "asynchronous"]
+exclude = [
+    "coverage.sh",
+    "COVERAGE.md",
+    "COVERAGE.zh_CN.md",
+    ".circleci/*",
+    "ci-check.sh",
+    ".llvm-cov.toml",
+    ".cargo-audit.toml.example",
+]
+
+[lib]
+name = "prism3_concurrent"
+doctest = false
+
+[dependencies]
+# 异步运行时
+tokio = { version = "1.0", features = ["sync"] }
