@@ -29,3 +29,6 @@ doctest = false
 [dependencies]
 # 异步运行时
 tokio = { version = "1.0", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
