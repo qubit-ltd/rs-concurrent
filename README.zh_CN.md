@@ -379,7 +379,19 @@ cargo test
 
 ## 许可证
 
-本项目采用 Apache License 2.0 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+Copyright (c) 2025 3-Prism Co. Ltd. All rights reserved.
+
+根据 Apache 许可证 2.0 版（"许可证"）授权；
+除非遵守许可证，否则您不得使用此文件。
+您可以在以下位置获取许可证副本：
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+除非适用法律要求或书面同意，否则根据许可证分发的软件
+按"原样"分发，不附带任何明示或暗示的担保或条件。
+有关许可证下的特定语言管理权限和限制，请参阅许可证。
+
+完整的许可证文本请参阅 [LICENSE](LICENSE)。
 
 ## 贡献
 
@@ -392,9 +404,8 @@ cargo test
 
 ## 作者
 
-**胡海星** - *三棱镜有限公司*
+**胡海星** - *棱芯科技有限公司*
 
 ---
 
-有关 Prism3 生态系统的更多信息，请访问我们的 [GitHub 仓库](https://github.com/3-prism/prism3-rust-commons)。
-
+有关 Prism3 生态系统的更多信息，请访问我们的 [GitHub 主页](https://github.com/3-prism)。
