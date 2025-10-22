@@ -67,7 +67,7 @@ DoubleCheckedLockExecutor
 ├── 核心配置
 │   ├── tester: 条件测试函数
 │   ├── logger: 日志配置（可选）
-│   └── error_supplier: 错误工厂（可选）
+│   └── error_supplier: `ArcReadonlySupplier` 错误工厂（可选）
 ├── Builder 模式
 │   └── 流式 API 构建
 └── 执行方法
@@ -129,7 +129,7 @@ where
     logger: Option<LogConfig>,
 
     /// 错误工厂 - 用于创建错误实例（可选）
-    error_supplier: Option<Arc<dyn Fn() -> E + Send + Sync>>,
+    error_supplier: Option<ArcReadonlySupplier<E>>,
 
     /// 执行器配置
     config: ExecutorConfig,
@@ -305,37 +305,78 @@ pub enum BuilderError {
 
 ## 5. 锁抽象设计
 
-### 5.1 方案选择
+### 5.1 现有 Lock 模块设计
 
-**推荐方案**：不引入额外的 trait，直接为标准库的锁类型提供实现
+本项目的 `lock` 模块已经提供了一套完善的锁抽象系统，包括：
 
-原因：
-- Rust 标准库的锁类型（`Mutex`、`RwLock`）已经足够好用
-- 避免过度抽象增加复杂度
-- 可以直接利用锁卫士（Guard）的 RAII 特性
+**Trait 定义：**
+- `Lock<T>` - 同步锁 trait（为 `std::sync::Mutex<T>` 实现）
+- `ReadWriteLock<T>` - 同步读写锁 trait（为 `std::sync::RwLock<T>` 实现）
+- `AsyncLock<T>` - 异步锁 trait（为 `tokio::sync::Mutex<T>` 实现）
+- `AsyncReadWriteLock<T>` - 异步读写锁 trait（为 `tokio::sync::RwLock<T>` 实现）
 
-### 5.2 支持的锁类型
+**包装器实现：**
+- `ArcMutex<T>` - Arc 包装的同步互斥锁
+- `ArcRwLock<T>` - Arc 包装的同步读写锁
+- `ArcAsyncMutex<T>` - Arc 包装的异步互斥锁
+- `ArcAsyncRwLock<T>` - Arc 包装的异步读写锁
+
+**设计哲学：**
+- 通过闭包隐藏 Guard 生命周期复杂性
+- RAII 自动释放锁
+- 提供统一的 API 接口
+- 支持编写泛型代码
+
+### 5.2 Lock Trait API
 
 ```rust
-// 支持以下锁类型：
-use std::sync::{Mutex, RwLock};
-use parking_lot::{Mutex as ParkingLotMutex, RwLock as ParkingLotRwLock};
+/// 同步锁 trait
+pub trait Lock<T: ?Sized> {
+    /// 获取锁并执行闭包
+    fn with_lock<R, F>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R;
 
-// 执行器方法接受 MutexGuard 或 RwLockReadGuard/RwLockWriteGuard
-// 调用方负责获取锁卫士
+    /// 尝试获取锁（非阻塞）
+    fn try_with_lock<R, F>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut T) -> R;
+}
+
+/// 同步读写锁 trait
+pub trait ReadWriteLock<T: ?Sized> {
+    /// 获取读锁并执行闭包
+    fn with_read_lock<R, F>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R;
+
+    /// 获取写锁并执行闭包
+    fn with_write_lock<R, F>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R;
+}
 ```
 
-### 5.3 使用模式
+### 5.3 双重检查锁执行器集成策略
 
+**方案选择**：直接使用 `Lock` 和 `ReadWriteLock` trait 作为泛型约束
+
+**优点**：
+- 充分利用现有的锁抽象
+- 支持所有实现了这些 trait 的锁类型
+- API 设计一致，易于使用和理解
+- 自动处理锁的生命周期
+
+**支持的锁类型**：
 ```rust
-// 方式1: 传入锁卫士（推荐）
-let guard = mutex.lock().unwrap();
-executor.execute_with_guard(guard, || { /* task */ });
+// 标准库类型（通过 trait 实现）
+use std::sync::{Mutex, RwLock};
 
-// 方式2: 传入锁引用，内部获取（便捷方法）
-executor.execute_mutex(&mutex, || { /* task */ });
-executor.execute_rwlock_write(&rwlock, || { /* task */ });
-executor.execute_rwlock_read(&rwlock, || { /* task */ });
+// 包装器类型（推荐用于跨线程共享）
+use crate::lock::{ArcMutex, ArcRwLock};
+
+// 异步版本（未来扩展）
+use crate::lock::{ArcAsyncMutex, ArcAsyncRwLock};
 ```
 
 ## 6. API 设计
@@ -362,7 +403,7 @@ where
 {
     tester: Option<ArcTester>,
     logger: Option<LogConfig>,
-    error_supplier: Option<Arc<dyn Fn() -> E + Send + Sync>>,
+    error_supplier: Option<ArcReadonlySupplier<E>>,
     config: ExecutorConfig,
 }
 
@@ -443,7 +484,7 @@ where
     where
         F: Fn() -> E + Send + Sync + 'static,
     {
-        self.error_supplier = Some(Arc::new(f));
+        self.error_supplier = Some(ArcReadonlySupplier::new(f));
         self
     }
 
@@ -453,7 +494,7 @@ where
         E: From<ExecutorError>,
     {
         let msg = message.into();
-        self.error_supplier = Some(Arc::new(move || {
+        self.error_supplier = Some(ArcReadonlySupplier::new(move || {
             E::from(ExecutorError::ConditionNotMetWithMessage(msg.clone()))
         }));
         self
@@ -488,48 +529,69 @@ where
 ### 6.2 执行方法
 
 ```rust
+use crate::lock::{Lock, ReadWriteLock};
+
 impl<E> DoubleCheckedLockExecutor<E>
 where
     E: std::error::Error + Send + Sync + 'static,
 {
-    // ==================== 基础版本 ====================
+    // ==================== 基础版本（使用 Lock trait）====================
 
-    /// 执行无返回值的任务
+    /// 使用互斥锁执行无返回值的任务
+    ///
+    /// # 泛型参数
+    /// - `L`: 实现了 `Lock<T>` trait 的锁类型
+    /// - `T`: 被锁保护的数据类型
+    /// - `F`: 任务闭包类型
     ///
     /// # 参数
-    /// - `mutex`: 互斥锁引用
+    /// - `lock`: 实现了 `Lock<T>` trait 的锁引用
     /// - `task`: 要执行的任务，返回 `Result<(), Box<dyn Error>>`
     ///
     /// # 返回值
     /// 返回 `ExecutionResult<()>`，其中 `success` 字段指示是否成功执行
-    pub fn execute_mutex<T, F>(
+    ///
+    /// # 执行流程
+    /// 1. 第一次检查条件（锁外快速失败）
+    /// 2. 获取锁
+    /// 3. 第二次检查条件（锁内确认）
+    /// 4. 执行任务
+    pub fn execute<L, T, F>(
         &self,
-        mutex: &Mutex<T>,
+        lock: &L,
         task: F,
     ) -> ExecutionResult<()>
     where
+        L: Lock<T>,
         F: FnOnce(&mut T) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
     {
-        self.call_mutex(mutex, |t| {
+        self.call(lock, |t| {
             task(t)?;
             Ok(())
         })
     }
 
-    /// 执行有返回值的任务
+    /// 使用互斥锁执行有返回值的任务
+    ///
+    /// # 泛型参数
+    /// - `L`: 实现了 `Lock<T>` trait 的锁类型
+    /// - `T`: 被锁保护的数据类型
+    /// - `F`: 任务闭包类型
+    /// - `R`: 任务返回值类型
     ///
     /// # 参数
-    /// - `mutex`: 互斥锁引用
+    /// - `lock`: 实现了 `Lock<T>` trait 的锁引用
     /// - `task`: 要执行的任务，返回 `Result<R, Box<dyn Error>>`
     ///
     /// # 返回值
     /// 返回 `ExecutionResult<R>`，包含任务的返回值（如果成功）
-    pub fn call_mutex<T, F, R>(
+    pub fn call<L, T, F, R>(
         &self,
-        mutex: &Mutex<T>,
+        lock: &L,
         task: F,
     ) -> ExecutionResult<R>
     where
+        L: Lock<T>,
         F: FnOnce(&mut T) -> Result<R, Box<dyn std::error::Error + Send + Sync>>,
     {
         // 第一次检查：锁外快速失败
@@ -538,62 +600,126 @@ where
             return ExecutionResult::fail();
         }
 
-        // 获取锁
-        let mut guard = match mutex.lock() {
-            Ok(g) => g,
-            Err(e) => {
-                log::error!("Failed to acquire lock: {}", e);
-                return ExecutionResult::fail_with_error(
-                    ExecutorError::LockPoisoned(e.to_string())
-                );
+        // 使用 Lock trait 的 with_lock 方法获取锁并执行
+        lock.with_lock(|data| {
+            // 第二次检查：锁内再次确认
+            if !(self.tester)() {
+                self.handle_condition_not_met();
+                return ExecutionResult::fail();
             }
-        };
 
-        // 第二次检查：锁内再次确认
+            // 执行任务
+            match task(data) {
+                Ok(value) => ExecutionResult::succeed(value),
+                Err(e) => ExecutionResult::fail_with_error(
+                    ExecutorError::TaskFailed(e.to_string())
+                ),
+            }
+        })
+    }
+
+    // ==================== 读写锁版本 ====================
+
+    /// 使用读写锁的写锁执行任务
+    ///
+    /// # 泛型参数
+    /// - `L`: 实现了 `ReadWriteLock<T>` trait 的锁类型
+    /// - `T`: 被锁保护的数据类型
+    /// - `F`: 任务闭包类型
+    /// - `R`: 任务返回值类型
+    ///
+    /// # 参数
+    /// - `lock`: 实现了 `ReadWriteLock<T>` trait 的锁引用
+    /// - `task`: 要执行的任务，返回 `Result<R, Box<dyn Error>>`
+    ///
+    /// # 返回值
+    /// 返回 `ExecutionResult<R>`，包含任务的返回值（如果成功）
+    pub fn call_with_write_lock<L, T, F, R>(
+        &self,
+        lock: &L,
+        task: F,
+    ) -> ExecutionResult<R>
+    where
+        L: ReadWriteLock<T>,
+        F: FnOnce(&mut T) -> Result<R, Box<dyn std::error::Error + Send + Sync>>,
+    {
+        // 第一次检查：锁外快速失败
         if !(self.tester)() {
-            drop(guard); // 显式释放锁
             self.handle_condition_not_met();
             return ExecutionResult::fail();
         }
 
-        // 执行任务
-        match task(&mut guard) {
-            Ok(value) => ExecutionResult::succeed(value),
-            Err(e) => ExecutionResult::fail_with_error(
-                ExecutorError::TaskFailed(e.to_string())
-            ),
-        }
+        // 使用 ReadWriteLock trait 的 with_write_lock 方法
+        lock.with_write_lock(|data| {
+            // 第二次检查：锁内再次确认
+            if !(self.tester)() {
+                self.handle_condition_not_met();
+                return ExecutionResult::fail();
+            }
+
+            // 执行任务
+            match task(data) {
+                Ok(value) => ExecutionResult::succeed(value),
+                Err(e) => ExecutionResult::fail_with_error(
+                    ExecutorError::TaskFailed(e.to_string())
+                ),
+            }
+        })
     }
 
-    /// 执行无返回值的任务（RwLock 写锁）
-    pub fn execute_rwlock_write<T, F>(
+    /// 使用读写锁的读锁执行任务（适用于只读操作）
+    ///
+    /// # 注意
+    /// 此方法使用读锁，任务闭包只能读取数据，不能修改
+    ///
+    /// # 泛型参数
+    /// - `L`: 实现了 `ReadWriteLock<T>` trait 的锁类型
+    /// - `T`: 被锁保护的数据类型
+    /// - `F`: 任务闭包类型
+    /// - `R`: 任务返回值类型
+    ///
+    /// # 参数
+    /// - `lock`: 实现了 `ReadWriteLock<T>` trait 的锁引用
+    /// - `task`: 要执行的任务，返回 `Result<R, Box<dyn Error>>`
+    ///
+    /// # 返回值
+    /// 返回 `ExecutionResult<R>`，包含任务的返回值（如果成功）
+    pub fn call_with_read_lock<L, T, F, R>(
         &self,
-        rwlock: &RwLock<T>,
-        task: F,
-    ) -> ExecutionResult<()>
-    where
-        F: FnOnce(&mut T) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
-    {
-        // 实现类似 execute_mutex
-        todo!()
-    }
-
-    /// 执行有返回值的任务（RwLock 读锁）
-    pub fn call_rwlock_read<T, F, R>(
-        &self,
-        rwlock: &RwLock<T>,
+        lock: &L,
         task: F,
     ) -> ExecutionResult<R>
     where
+        L: ReadWriteLock<T>,
         F: FnOnce(&T) -> Result<R, Box<dyn std::error::Error + Send + Sync>>,
     {
-        // 实现类似 call_mutex，但使用 read() 而非 lock()
-        todo!()
+        // 第一次检查：锁外快速失败
+        if !(self.tester)() {
+            self.handle_condition_not_met();
+            return ExecutionResult::fail();
+        }
+
+        // 使用 ReadWriteLock trait 的 with_read_lock 方法
+        lock.with_read_lock(|data| {
+            // 第二次检查：锁内再次确认
+            if !(self.tester)() {
+                self.handle_condition_not_met();
+                return ExecutionResult::fail();
+            }
+
+            // 执行任务
+            match task(data) {
+                Ok(value) => ExecutionResult::succeed(value),
+                Err(e) => ExecutionResult::fail_with_error(
+                    ExecutorError::TaskFailed(e.to_string())
+                ),
+            }
+        })
     }
 
     // ==================== 带回滚版本 ====================
 
-    /// 执行无返回值的任务，并提供回滚机制
+    /// 使用互斥锁执行任务，并提供回滚机制
     ///
     /// # 执行流程
     /// 1. 检查条件是否满足，若不满足则失败
@@ -603,8 +729,15 @@ where
     ///    - 若满足，则执行 `task`
     /// 4. 若 `task` 执行时抛出异常，则释放锁后执行 `rollback_action`
     ///
+    /// # 泛型参数
+    /// - `L`: 实现了 `Lock<T>` trait 的锁类型
+    /// - `T`: 被锁保护的数据类型
+    /// - `F`: 任务闭包类型
+    /// - `O`: 锁外操作闭包类型
+    /// - `R`: 回滚操作闭包类型
+    ///
     /// # 参数
-    /// - `mutex`: 互斥锁引用
+    /// - `lock`: 实现了 `Lock<T>` trait 的锁引用
     /// - `task`: 要执行的核心任务
     /// - `outside_action`: 锁外准备操作
     /// - `rollback_action`: 失败时的回滚操作
@@ -612,20 +745,21 @@ where
     /// # 死锁警告
     /// `outside_action` 在获取锁**之前**执行，因此**禁止**在此操作中尝试获取
     /// 相同的锁或任何可能形成锁环的其他锁，否则会导致死锁！
-    pub fn execute_with_rollback_mutex<T, F, O, R>(
+    pub fn execute_with_rollback<L, T, F, O, R>(
         &self,
-        mutex: &Mutex<T>,
+        lock: &L,
         task: F,
         outside_action: O,
         rollback_action: R,
     ) -> ExecutionResult<()>
     where
+        L: Lock<T>,
         F: FnOnce(&mut T) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
         O: FnOnce() -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
         R: FnOnce() -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
     {
-        self.call_with_rollback_mutex(
-            mutex,
+        self.call_with_rollback(
+            lock,
             |t| {
                 task(t)?;
                 Ok(())
@@ -635,18 +769,36 @@ where
         )
     }
 
-    /// 执行有返回值的任务，并提供回滚机制
-    pub fn call_with_rollback_mutex<T, F, O, R, V>(
+    /// 使用互斥锁执行有返回值的任务，并提供回滚机制
+    ///
+    /// # 泛型参数
+    /// - `L`: 实现了 `Lock<T>` trait 的锁类型
+    /// - `T`: 被锁保护的数据类型
+    /// - `F`: 任务闭包类型
+    /// - `O`: 锁外操作闭包类型
+    /// - `Rb`: 回滚操作闭包类型
+    /// - `V`: 任务返回值类型
+    ///
+    /// # 参数
+    /// - `lock`: 实现了 `Lock<T>` trait 的锁引用
+    /// - `task`: 要执行的核心任务
+    /// - `outside_action`: 锁外准备操作
+    /// - `rollback_action`: 失败时的回滚操作
+    ///
+    /// # 返回值
+    /// 返回 `ExecutionResult<V>`，包含任务的返回值（如果成功）
+    pub fn call_with_rollback<L, T, F, O, Rb, V>(
         &self,
-        mutex: &Mutex<T>,
+        lock: &L,
         task: F,
         outside_action: O,
-        rollback_action: R,
+        rollback_action: Rb,
     ) -> ExecutionResult<V>
     where
+        L: Lock<T>,
         F: FnOnce(&mut T) -> Result<V, Box<dyn std::error::Error + Send + Sync>>,
         O: FnOnce() -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
-        R: FnOnce() -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+        Rb: FnOnce() -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
     {
         // 第一次检查
         if !(self.tester)() {
@@ -662,35 +814,94 @@ where
             );
         }
 
-        // 获取锁
-        let mut guard = match mutex.lock() {
-            Ok(g) => g,
-            Err(e) => {
-                self.run_rollback(&rollback_action, None);
-                return ExecutionResult::fail_with_error(
-                    ExecutorError::LockPoisoned(e.to_string())
-                );
+        // 使用 Lock trait 的 with_lock 方法
+        // 注意：这里无法直接在闭包内部处理回滚，需要特殊处理
+        let result = lock.with_lock(|data| {
+            // 第二次检查
+            if !(self.tester)() {
+                self.handle_condition_not_met();
+                return Err(ExecutorError::ConditionNotMet);
             }
-        };
 
-        // 第二次检查
+            // 执行任务
+            task(data).map_err(|e| ExecutorError::TaskFailed(e.to_string()))
+        });
+
+        // 处理结果和回滚
+        match result {
+            Ok(value) => ExecutionResult::succeed(value),
+            Err(e) => {
+                let error_msg = e.to_string();
+                self.run_rollback(&rollback_action, Some(&error_msg));
+                ExecutionResult::fail_with_error(e)
+            }
+        }
+    }
+
+    /// 使用读写锁的写锁执行任务，并提供回滚机制
+    ///
+    /// # 泛型参数
+    /// - `L`: 实现了 `ReadWriteLock<T>` trait 的锁类型
+    /// - `T`: 被锁保护的数据类型
+    /// - `F`: 任务闭包类型
+    /// - `O`: 锁外操作闭包类型
+    /// - `Rb`: 回滚操作闭包类型
+    /// - `V`: 任务返回值类型
+    ///
+    /// # 参数
+    /// - `lock`: 实现了 `ReadWriteLock<T>` trait 的锁引用
+    /// - `task`: 要执行的核心任务
+    /// - `outside_action`: 锁外准备操作
+    /// - `rollback_action`: 失败时的回滚操作
+    ///
+    /// # 返回值
+    /// 返回 `ExecutionResult<V>`，包含任务的返回值（如果成功）
+    pub fn call_with_rollback_write_lock<L, T, F, O, Rb, V>(
+        &self,
+        lock: &L,
+        task: F,
+        outside_action: O,
+        rollback_action: Rb,
+    ) -> ExecutionResult<V>
+    where
+        L: ReadWriteLock<T>,
+        F: FnOnce(&mut T) -> Result<V, Box<dyn std::error::Error + Send + Sync>>,
+        O: FnOnce() -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+        Rb: FnOnce() -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+    {
+        // 第一次检查
         if !(self.tester)() {
-            drop(guard);
             self.handle_condition_not_met();
-            self.run_rollback(&rollback_action, None);
             return ExecutionResult::fail();
         }
 
-        // 执行任务
-        match task(&mut guard) {
+        // 执行锁外操作
+        if let Err(e) = outside_action() {
+            log::error!("Outside action failed: {}", e);
+            return ExecutionResult::fail_with_error(
+                ExecutorError::TaskFailed(e.to_string())
+            );
+        }
+
+        // 使用 ReadWriteLock trait 的 with_write_lock 方法
+        let result = lock.with_write_lock(|data| {
+            // 第二次检查
+            if !(self.tester)() {
+                self.handle_condition_not_met();
+                return Err(ExecutorError::ConditionNotMet);
+            }
+
+            // 执行任务
+            task(data).map_err(|e| ExecutorError::TaskFailed(e.to_string()))
+        });
+
+        // 处理结果和回滚
+        match result {
             Ok(value) => ExecutionResult::succeed(value),
             Err(e) => {
-                drop(guard);
                 let error_msg = e.to_string();
                 self.run_rollback(&rollback_action, Some(&error_msg));
-                ExecutionResult::fail_with_error(
-                    ExecutorError::TaskFailed(error_msg)
-                )
+                ExecutionResult::fail_with_error(e)
             }
         }
     }
@@ -704,9 +915,9 @@ where
             log::log!(log_config.level, "{}", log_config.message);
         }
 
-        // 抛出错误（如果配置了 error_supplier）
+        // 抛出错误（如果配置了 `error_supplier`/`ArcReadonlySupplier`）
         // 注意：Rust 中不能直接抛出异常，这里通过返回值传递错误
-        // 实际实现中，可以将 error_supplier 的结果存储到 ExecutionResult 中
+        // 实际实现中，可以将 `error_supplier` 或 `ArcReadonlySupplier` 的结果存储到 ExecutionResult 中
     }
 
     /// 执行回滚操作
@@ -784,8 +995,11 @@ where
 ### 7.1 基础用法
 
 ```rust
-use std::sync::{Arc, RwLock};
-use prism3_rust_concurrent::DoubleCheckedLockExecutor;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use prism3_rust_concurrent::{
+    DoubleCheckedLockExecutor,
+    lock::{ArcMutex, ArcRwLock, Lock, ReadWriteLock},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum State {
@@ -795,9 +1009,12 @@ enum State {
 }
 
 struct Service {
-    state: Arc<RwLock<State>>,
-    pool_size: i32,
-    cache_size: i32,
+    // 使用 AtomicBool 作为运行状态（双重检查的条件）
+    running: Arc<AtomicBool>,
+    // 使用 ArcMutex 保护可变状态
+    pool_size: ArcMutex<i32>,
+    cache_size: ArcMutex<i32>,
+    // 双重检查锁执行器
     executor: DoubleCheckedLockExecutor<ServiceError>,
 }
 
@@ -812,53 +1029,50 @@ enum ServiceError {
 
 impl Service {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let state = Arc::new(RwLock::new(State::Stopped));
-        let state_clone = state.clone();
+        let running = Arc::new(AtomicBool::new(false));
+        let running_clone = running.clone();
 
         // 构建执行器
         let executor = DoubleCheckedLockExecutor::builder()
-            .tester(move || {
-                if let Ok(guard) = state_clone.read() {
-                    *guard == State::Running
-                } else {
-                    false
-                }
-            })
+            .tester_fn(move || running_clone.load(Ordering::Acquire))
             .logger(
                 log::Level::Error,
-                "Cannot change states while the service is not running",
+                "Cannot modify service while it is not running",
             )
             .error_supplier(|| ServiceError::NotRunning)
             .build()?;
 
         Ok(Self {
-            state,
-            pool_size: 0,
-            cache_size: 0,
+            running,
+            pool_size: ArcMutex::new(0),
+            cache_size: ArcMutex::new(0),
             executor,
         })
     }
 
-    /// 设置线程池大小
-    pub fn set_pool_size(&mut self, size: i32) -> Result<(), Box<dyn std::error::Error>> {
-        // 创建一个包含 self 字段的 Mutex 来保护修改操作
-        // 实际使用中，可能需要更细粒度的锁设计
-        let data = Arc::new(Mutex::new((self.pool_size, self.cache_size)));
+    /// 启动服务
+    pub fn start(&self) {
+        self.running.store(true, Ordering::Release);
+    }
 
-        let result = self.executor.execute_mutex(&data, move |fields| {
+    /// 停止服务
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::Release);
+    }
+
+    /// 设置线程池大小
+    pub fn set_pool_size(&self, size: i32) -> Result<(), Box<dyn std::error::Error>> {
+        let result = self.executor.execute(&self.pool_size, |pool_size| {
             if size <= 0 {
                 return Err(Box::new(ServiceError::InvalidParameter(
                     "pool size must be positive".to_string()
-                )));
+                )) as Box<dyn std::error::Error + Send + Sync>);
             }
-            fields.0 = size;
+            *pool_size = size;
             Ok(())
         });
 
         if result.success {
-            if let Ok(guard) = data.lock() {
-                self.pool_size = guard.0;
-            }
             Ok(())
         } else {
             Err("Failed to set pool size".into())
@@ -867,52 +1081,150 @@ impl Service {
 
     /// 获取线程池大小
     pub fn get_pool_size(&self) -> Option<i32> {
-        let data = Arc::new(RwLock::new(self.pool_size));
+        let result = self.executor.call(&self.pool_size, |pool_size| {
+            Ok(*pool_size)
+        });
 
-        let result = self.executor.call_rwlock_read(&data, |&pool_size| {
-            Ok(pool_size)
+        result.value
+    }
+
+    /// 设置缓存大小
+    pub fn set_cache_size(&self, size: i32) -> Result<(), Box<dyn std::error::Error>> {
+        let result = self.executor.execute(&self.cache_size, |cache_size| {
+            if size <= 0 {
+                return Err(Box::new(ServiceError::InvalidParameter(
+                    "cache size must be positive".to_string()
+                )) as Box<dyn std::error::Error + Send + Sync>);
+            }
+            *cache_size = size;
+            Ok(())
         });
 
         if result.success {
-            result.value
+            Ok(())
         } else {
-            None
+            Err("Failed to set cache size".into())
         }
     }
+}
+
+// 使用示例
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let service = Arc::new(Service::new()?);
+
+    // 启动服务
+    service.start();
+
+    // 在多个线程中并发修改配置
+    let s1 = service.clone();
+    let t1 = std::thread::spawn(move || {
+        s1.set_pool_size(10).unwrap();
+    });
+
+    let s2 = service.clone();
+    let t2 = std::thread::spawn(move || {
+        s2.set_cache_size(100).unwrap();
+    });
+
+    t1.join().unwrap();
+    t2.join().unwrap();
+
+    println!("Pool size: {:?}", service.get_pool_size());
+
+    // 停止服务后尝试修改配置（应该失败）
+    service.stop();
+
+    match service.set_pool_size(20) {
+        Ok(_) => println!("Unexpected success"),
+        Err(e) => println!("Expected failure: {}", e),
+    }
+
+    Ok(())
 }
 ```
 
 ### 7.2 带回滚机制的用法
 
 ```rust
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
+use std::cell::RefCell;
+use prism3_rust_concurrent::{
+    DoubleCheckedLockExecutor,
+    lock::{ArcMutex, Lock},
+};
+
+#[derive(Clone, Debug)]
+struct Resource {
+    id: u64,
+    // ... 其他字段
+}
+
+impl Resource {
+    /// 分配资源（可能耗时）
+    fn allocate() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        // 模拟资源分配
+        Ok(Resource { id: 1 })
+    }
+
+    /// 释放资源
+    fn deallocate(self) {
+        // 模拟资源释放
+        println!("Releasing resource {}", self.id);
+    }
+}
 
 struct ResourceManager {
-    state: Arc<AtomicBool>,
-    resources: Arc<Mutex<Vec<Resource>>>,
+    active: Arc<AtomicBool>,
+    resources: ArcMutex<Vec<Resource>>,
     executor: DoubleCheckedLockExecutor<ManagerError>,
 }
 
-impl ResourceManager {
-    pub fn allocate_resource(&self) -> Result<Resource, Box<dyn std::error::Error>> {
-        let mut temp_resource = None;
+#[derive(Debug, thiserror::Error)]
+enum ManagerError {
+    #[error("Manager is not active")]
+    NotActive,
+}
 
-        let result = self.executor.call_with_rollback_mutex(
+impl ResourceManager {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let active = Arc::new(AtomicBool::new(true));
+        let active_clone = active.clone();
+
+        let executor = DoubleCheckedLockExecutor::builder()
+            .tester_fn(move || active_clone.load(Ordering::Acquire))
+            .logger(log::Level::Error, "Resource manager is not active")
+            .error_supplier(|| ManagerError::NotActive)
+            .build()?;
+
+        Ok(Self {
+            active,
+            resources: ArcMutex::new(Vec::new()),
+            executor,
+        })
+    }
+
+    /// 分配资源
+    pub fn allocate_resource(&self) -> Result<Resource, Box<dyn std::error::Error>> {
+        // 使用 RefCell 在闭包间共享临时资源
+        let temp_resource = RefCell::new(None);
+
+        let result = self.executor.call_with_rollback(
             &self.resources,
             |resources| {
-                // 锁内操作：添加资源
-                let resource = temp_resource.take().unwrap();
+                // 锁内操作：将预分配的资源添加到资源池
+                let resource = temp_resource.borrow_mut().take().unwrap();
                 resources.push(resource.clone());
                 Ok(resource)
             },
             || {
-                // 锁外操作：预分配资源
-                temp_resource = Some(Resource::allocate()?);
+                // 锁外操作：预分配资源（可能耗时）
+                let resource = Resource::allocate()?;
+                *temp_resource.borrow_mut() = Some(resource);
                 Ok(())
             },
             || {
                 // 回滚操作：释放预分配的资源
-                if let Some(resource) = temp_resource.take() {
+                if let Some(resource) = temp_resource.borrow_mut().take() {
                     resource.deallocate();
                 }
                 Ok(())
@@ -921,6 +1233,37 @@ impl ResourceManager {
 
         result.value.ok_or_else(|| "Failed to allocate resource".into())
     }
+
+    /// 激活管理器
+    pub fn activate(&self) {
+        self.active.store(true, Ordering::Release);
+    }
+
+    /// 停用管理器
+    pub fn deactivate(&self) {
+        self.active.store(false, Ordering::Release);
+    }
+}
+
+// 使用示例
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let manager = Arc::new(ResourceManager::new()?);
+
+    // 正常分配资源
+    match manager.allocate_resource() {
+        Ok(resource) => println!("Allocated resource: {:?}", resource),
+        Err(e) => println!("Failed to allocate: {}", e),
+    }
+
+    // 停用后尝试分配（应该失败，且触发回滚）
+    manager.deactivate();
+
+    match manager.allocate_resource() {
+        Ok(_) => println!("Unexpected success"),
+        Err(e) => println!("Expected failure: {}", e),
+    }
+
+    Ok(())
 }
 ```
 
@@ -928,20 +1271,99 @@ impl ResourceManager {
 
 ```rust
 use prism3_rust_clock::meter::TimeMeter;
+use prism3_rust_concurrent::{
+    DoubleCheckedLockExecutor,
+    lock::{ArcMutex, Lock},
+};
 
-let mut meter = TimeMeter::new();
+// 时间度量可以在任务闭包内部进行
+fn measure_execution() {
+    let executor = DoubleCheckedLockExecutor::builder()
+        .tester_fn(|| true)
+        .build()
+        .unwrap();
 
-let result = executor.call_with_metrics_mutex(
-    &mutex,
-    |data| {
+    let data = ArcMutex::new(vec![1, 2, 3, 4, 5]);
+    let mut meter = TimeMeter::new();
+
+    meter.start();
+    let result = executor.call(&data, |vec| {
         // 执行耗时操作
-        expensive_operation(data)?;
-        Ok(42)
-    },
-    &mut meter,
-);
+        vec.iter().sum::<i32>();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        Ok(vec.len())
+    });
+    meter.stop();
 
-println!("Execution time: {:?}", meter.elapsed());
+    if result.success {
+        println!("Execution time: {:?}", meter.elapsed());
+        println!("Result: {:?}", result.value);
+    }
+}
+```
+
+### 7.4 使用读写锁
+
+```rust
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use prism3_rust_concurrent::{
+    DoubleCheckedLockExecutor,
+    lock::{ArcRwLock, ReadWriteLock},
+};
+
+struct Cache {
+    active: Arc<AtomicBool>,
+    data: ArcRwLock<HashMap<String, String>>,
+    executor: DoubleCheckedLockExecutor<CacheError>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum CacheError {
+    #[error("Cache is not active")]
+    NotActive,
+}
+
+impl Cache {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let active = Arc::new(AtomicBool::new(true));
+        let active_clone = active.clone();
+
+        let executor = DoubleCheckedLockExecutor::builder()
+            .tester_fn(move || active_clone.load(Ordering::Acquire))
+            .error_supplier(|| CacheError::NotActive)
+            .build()?;
+
+        Ok(Self {
+            active,
+            data: ArcRwLock::new(HashMap::new()),
+            executor,
+        })
+    }
+
+    /// 读取缓存（使用读锁）
+    pub fn get(&self, key: &str) -> Option<String> {
+        let key = key.to_string();
+        let result = self.executor.call_with_read_lock(&self.data, |cache| {
+            Ok(cache.get(&key).cloned())
+        });
+
+        result.value.flatten()
+    }
+
+    /// 写入缓存（使用写锁）
+    pub fn set(&self, key: String, value: String) -> Result<(), Box<dyn std::error::Error>> {
+        let result = self.executor.call_with_write_lock(&self.data, |cache| {
+            cache.insert(key, value);
+            Ok(())
+        });
+
+        if result.success {
+            Ok(())
+        } else {
+            Err("Failed to set cache value".into())
+        }
+    }
+}
 ```
 
 ## 8. Java vs Rust 关键差异对照
@@ -949,19 +1371,43 @@ println!("Execution time: {:?}", meter.elapsed());
 | 特性 | Java 版本 | Rust 版本 | 说明 |
 |-----|---------|---------|------|
 | **异常处理** | 异常（Exception） | `Result<T, E>` | Rust 使用显式错误处理，更安全 |
-| **锁类型** | `Lock` 接口 | `Mutex<T>` / `RwLock<T>` | Rust 的锁直接保护数据 |
-| **锁卫士** | 手动 lock/unlock | RAII Guard | Rust 自动释放锁，避免忘记 unlock |
-| **闭包** | Lambda 表达式 | `Fn` / `FnOnce` / `FnMut` | Rust 需要明确所有权和生命周期 |
-| **Volatile** | `volatile` 字段 | `Arc<AtomicXxx>` / `Arc<Mutex<T>>` | Rust 通过类型系统保证线程安全 |
+| **锁类型** | `Lock` 接口 | `Lock<T>` / `ReadWriteLock<T>` trait | Rust 使用 trait 统一锁接口 |
+| **锁实现** | `ReentrantLock` 等 | `Mutex<T>` / `RwLock<T>` | Rust 的锁直接保护数据 |
+| **锁包装** | 无需包装 | `ArcMutex<T>` / `ArcRwLock<T>` | Rust 需要 Arc 包装以便跨线程共享 |
+| **锁卫士** | 手动 lock/unlock | RAII Guard（隐藏在 trait 中） | Rust 自动释放锁，避免忘记 unlock |
+| **闭包风格** | Lambda 接受锁卫士 | 闭包接受数据引用 | Rust 通过 trait 隐藏 Guard 生命周期 |
+| **闭包类型** | Lambda 表达式 | `Fn` / `FnOnce` / `FnMut` | Rust 需要明确所有权和生命周期 |
+| **Volatile** | `volatile` 字段 | `Arc<AtomicXxx>` | Rust 通过类型系统保证可见性 |
 | **线程安全** | `synchronized` / `volatile` | `Send` + `Sync` trait | 编译期检查，零运行时开销 |
-| **日志** | SLF4J | `log` / `tracing` crate | Rust 生态标准 |
+| **日志** | SLF4J | `log` crate | Rust 生态标准 |
 | **Builder** | 可选参数 | `Option<T>` | 必须显式处理 None 情况 |
 | **错误栈** | `fillInStackTrace()` | `std::backtrace` | Rust 1.65+ 稳定 |
 | **泛型** | 类型擦除 | 单态化 | Rust 保留类型信息，性能更好 |
+| **API 风格** | 方法重载 | 不同方法名 | Rust 不支持重载，使用泛型约束 |
 
 ## 9. 重要注意事项
 
-### 9.1 Volatile 替代方案
+### 9.1 使用 Lock Trait 的优势
+
+使用 `Lock` 和 `ReadWriteLock` trait 的好处：
+
+```rust
+// ✅ 推荐：使用 trait，自动管理锁的生命周期
+use prism3_rust_concurrent::lock::{Lock, ArcMutex};
+
+let data = ArcMutex::new(42);
+executor.call(&data, |value| {
+    *value += 1;  // 闭包自动接收 &mut i32
+    Ok(*value)
+}); // 锁自动释放
+
+// ❌ 不推荐：手动管理锁（容易出错）
+let guard = data.lock().unwrap();
+*guard += 1;
+drop(guard);  // 可能忘记释放
+```
+
+### 9.2 Volatile 替代方案
 
 Java 的 `volatile` 在 Rust 中没有直接对应物，需要使用以下方案：
 
@@ -969,34 +1415,49 @@ Java 的 `volatile` 在 Rust 中没有直接对应物，需要使用以下方案
 // ✅ 推荐方案1：AtomicBool（适用于简单布尔状态）
 use std::sync::atomic::{AtomicBool, Ordering};
 let state = Arc::new(AtomicBool::new(false));
-builder.tester(move || state.load(Ordering::Acquire))
+builder.tester_fn(move || state.load(Ordering::Acquire))
 
-// ✅ 推荐方案2：Arc<Mutex<T>>（适用于复杂状态）
-let state = Arc::new(Mutex::new(State::Running));
-builder.tester(move || {
-    matches!(*state.lock().unwrap(), State::Running)
+// ✅ 推荐方案2：ArcMutex（适用于复杂状态）
+use prism3_rust_concurrent::lock::ArcMutex;
+let state = ArcMutex::new(State::Running);
+let state_clone = state.clone();
+builder.tester_fn(move || {
+    state_clone.with_lock(|s| *s == State::Running)
 })
 
-// ✅ 推荐方案3：Arc<RwLock<T>>（读多写少场景）
-let state = Arc::new(RwLock::new(State::Running));
-builder.tester(move || {
-    matches!(*state.read().unwrap(), State::Running)
+// ✅ 推荐方案3：ArcRwLock（读多写少场景）
+use prism3_rust_concurrent::lock::ArcRwLock;
+let state = ArcRwLock::new(State::Running);
+let state_clone = state.clone();
+builder.tester_fn(move || {
+    state_clone.with_read_lock(|s| *s == State::Running)
 })
 
 // ❌ 错误方案：普通 Rc<RefCell<T>>（不是线程安全的）
 let state = Rc::new(RefCell::new(State::Running)); // 编译错误！
 ```
 
-### 9.2 死锁预防
+### 9.3 选择合适的锁类型
+
+根据使用场景选择锁类型：
+
+| 场景 | 推荐锁类型 | 原因 |
+|-----|----------|------|
+| 简单互斥访问 | `ArcMutex<T>` | 简单直接，性能好 |
+| 读多写少 | `ArcRwLock<T>` | 允许并发读取 |
+| 条件状态检查 | `Arc<AtomicBool>` | 无锁，性能最优 |
+| 异步场景 | `ArcAsyncMutex<T>` | 不阻塞异步运行时 |
+
+### 9.4 死锁预防
 
 在使用 `execute_with_rollback` 或 `call_with_rollback` 时：
 
 - ✅ `outside_action` 中可以进行文件 I/O、网络请求等无锁操作
 - ✅ `outside_action` 中可以获取**不同**的锁（注意锁顺序）
-- ❌ `outside_action` 中**禁止**获取 `mutex/rwlock` 参数指定的锁
+- ❌ `outside_action` 中**禁止**获取 `lock` 参数指定的锁
 - ❌ `outside_action` 中**禁止**获取可能形成锁环的其他锁
 
-### 9.3 性能考虑
+### 9.5 性能考虑
 
 1. **高并发失败场景**：如果预期条件检查会频繁失败，考虑：
    - 使用 `disable_backtrace(true)` 禁用回溯
@@ -1006,14 +1467,22 @@ let state = Rc::new(RefCell::new(State::Running)); // 编译错误！
 
 3. **日志开销**：在性能敏感场景，考虑使用条件编译或运行时开关控制日志
 
-### 9.4 错误处理最佳实践
+4. **使用 Lock Trait 的性能**：通过 trait 的闭包方式与手动管理锁性能相当，因为：
+   - 闭包会被内联优化
+   - RAII Guard 在编译期优化
+   - 零成本抽象
+
+### 9.6 错误处理最佳实践
 
 ```rust
+use prism3_rust_concurrent::lock::{Lock, ArcMutex};
+
 // ✅ 推荐：使用 ExecutionResult 检查成功状态
-let result = executor.call_mutex(&mutex, task);
+let data = ArcMutex::new(42);
+let result = executor.call(&data, |value| Ok(*value));
 if result.success {
     let value = result.value.unwrap();
-    // 使用 value
+    println!("Value: {}", value);
 } else {
     if let Some(error) = result.error {
         log::error!("Execution failed: {}", error);
@@ -1032,7 +1501,7 @@ impl<T> ExecutionResult<T> {
 }
 
 // 使用
-executor.call_mutex(&mutex, task).into_result()?;
+let value = executor.call(&data, |v| Ok(*v)).into_result()?;
 ```
 
 ## 10. 实施计划
@@ -1048,18 +1517,19 @@ executor.call_mutex(&mutex, task).into_result()?;
 
 ### 10.2 第二阶段：核心功能
 
-- [ ] 实现 `execute_mutex()` 方法
-- [ ] 实现 `call_mutex()` 方法
-- [ ] 实现 `execute_rwlock_write()` 方法
-- [ ] 实现 `call_rwlock_read()` 方法
-- [ ] 实现内部辅助方法
+- [ ] 实现 `execute()` 方法（使用 `Lock` trait）
+- [ ] 实现 `call()` 方法（使用 `Lock` trait）
+- [ ] 实现 `call_with_write_lock()` 方法（使用 `ReadWriteLock` trait）
+- [ ] 实现 `call_with_read_lock()` 方法（使用 `ReadWriteLock` trait）
+- [ ] 实现内部辅助方法（`handle_condition_not_met`、`run_rollback`）
 
 ### 10.3 第三阶段：高级功能
 
-- [ ] 实现带回滚机制的方法
-- [ ] 集成 `prism3-rust-clock` 的 `TimeMeter`
-- [ ] 集成 `prism3-rust-function` 的 trait
-- [ ] 实现 `parking_lot` 锁的支持（可选）
+- [ ] 实现 `execute_with_rollback()` 方法
+- [ ] 实现 `call_with_rollback()` 方法
+- [ ] 实现 `call_with_rollback_write_lock()` 方法
+- [ ] 集成 `prism3-rust-clock` 的 `TimeMeter`（可选）
+- [ ] 实现异步版本支持（`AsyncLock` trait）（未来）
 
 ### 10.4 第四阶段：测试和文档
 
@@ -1080,48 +1550,84 @@ executor.call_mutex(&mutex, task).into_result()?;
 
 ## 11. 开放问题
 
-### 11.1 待讨论的设计选择
+### 11.1 已解决的设计问题
 
-1. **锁抽象层级**
-   - 是否需要引入 `LockTrait` 来统一不同锁类型？
-   - 还是直接为每种锁类型提供专门的方法？
+1. **锁抽象层级** ✅ 已解决
+   - 使用 `Lock<T>` 和 `ReadWriteLock<T>` trait 统一接口
+   - 通过泛型约束支持所有实现了这些 trait 的锁类型
+   - 闭包风格 API 隐藏 Guard 生命周期复杂性
 
-2. **错误类型设计**
-   - 是否使用 `anyhow` 或 `eyre` 简化错误处理？
-   - 还是坚持使用 `thiserror` 提供精确的错误类型？
+2. **错误类型设计** ✅ 已确定
+   - 使用 `thiserror` 定义精确的错误类型（`ExecutorError`、`BuilderError`）
+   - 任务闭包返回 `Box<dyn Error + Send + Sync>` 保持灵活性
+   - `ExecutionResult<T>` 封装成功/失败状态
 
-3. **异步支持**
-   - 是否需要提供 async 版本（`Tokio::Mutex`、`Tokio::RwLock`）？
-   - 如果需要，是否作为单独的类型还是通过特性门控？
-
-4. **日志框架**
-   - 使用 `log` facade 还是直接依赖 `tracing`？
-   - 是否支持自定义日志后端？
+3. **日志框架** ✅ 已确定
+   - 使用 `log` facade，保持框架中立
+   - 用户可以选择任何兼容的日志实现
 
 ### 11.2 待确认的技术细节
 
-1. 是否需要支持 `parking_lot` 的锁类型？
-2. 是否需要提供无锁版本（仅用于基准测试对比）？
-3. 错误消息的国际化（i18n）支持？
-4. 是否需要提供宏来简化常见用法？
+1. **异步支持**
+   - 是否需要提供 async 版本（使用 `AsyncLock` trait）？
+   - 如果需要，是作为单独的类型还是通过特性门控？
+   - 异步版本的 API 设计是否需要特殊处理？
+
+2. **parking_lot 支持**
+   - 是否需要为 `parking_lot` 的锁类型提供 trait 实现？
+   - 优点：更好的性能和更多特性
+   - 缺点：增加依赖
+
+3. **高级功能**
+   - 是否需要提供无锁版本（仅用于基准测试对比）？
+   - 是否需要提供宏来简化常见用法？
+   - 是否需要支持超时机制？
+
+4. **错误处理增强**
+   - 是否需要错误消息的国际化（i18n）支持？
+   - 是否需要提供错误重试机制？
 
 ## 12. 参考资料
 
+### 12.1 项目内部资料
+
 - [Java 版本源码](../external/common-java/src/main/java/ltd/qubit/commons/concurrent/DoubleCheckedLockExecutor.java)
-- [Rust 并发模型](https://doc.rust-lang.org/book/ch16-00-concurrency.html)
-- [Rust Atomics and Locks](https://marabos.nl/atomics/)
+- [prism3-rust-concurrent Lock 模块](../src/lock/)
+  - [Lock trait](../src/lock/lock.rs)
+  - [ReadWriteLock trait](../src/lock/read_write_lock.rs)
+  - [AsyncLock trait](../src/lock/async_lock.rs)
+  - [AsyncReadWriteLock trait](../src/lock/async_read_write_lock.rs)
+  - [ArcMutex 包装器](../src/lock/arc_mutex.rs)
+  - [ArcRwLock 包装器](../src/lock/arc_rw_lock.rs)
 - [prism3-rust-function 文档](../prism3-rust-function/README.md)
 - [prism3-rust-clock 文档](../prism3-rust-clock/README.md)
+
+### 12.2 外部资料
+
+- [Rust 并发模型](https://doc.rust-lang.org/book/ch16-00-concurrency.html)
+- [Rust Atomics and Locks](https://marabos.nl/atomics/)
+- [std::sync 模块文档](https://doc.rust-lang.org/std/sync/)
+- [tokio::sync 模块文档](https://docs.rs/tokio/latest/tokio/sync/)
 
 ## 13. 变更历史
 
 | 版本 | 日期 | 作者 | 变更说明 |
 |-----|------|------|---------|
 | 1.0 | 2025-01-XX | AI Assistant | 初始版本 |
+| 1.1 | 2025-01-22 | AI Assistant | 根据重构后的 lock 模块更新设计 |
+
+**主要变更内容（v1.1）：**
+- 更新锁抽象设计，使用 `Lock<T>` 和 `ReadWriteLock<T>` trait
+- 更新 API 设计，使用闭包风格隐藏 Guard 生命周期
+- 添加 `ArcMutex` 和 `ArcRwLock` 包装器的使用说明
+- 更新所有示例代码以反映新的 API 设计
+- 添加性能考虑和最佳实践
+- 更新 Java vs Rust 对照表
+- 添加选择锁类型的指导
 
 ---
 
 **文档状态**：草案
-**最后更新**：2025-01-XX
+**最后更新**：2025-01-22
 **审阅者**：待定
 
