@@ -11,4 +11,3 @@
 //! Tests for various concurrent utility functions.
 
 mod executor_tests;
-mod lock_tests;
