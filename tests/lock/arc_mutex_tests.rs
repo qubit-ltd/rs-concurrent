@@ -21,7 +21,7 @@ mod arc_mutex_tests {
     #[test]
     fn test_arc_mutex_new() {
         let mutex = ArcMutex::new(42);
-        let result = mutex.with_lock(|value| *value);
+        let result = mutex.read(|value| *value);
         assert_eq!(result, 42);
     }
 
@@ -30,14 +30,14 @@ mod arc_mutex_tests {
         let mutex = ArcMutex::new(0);
 
         // Test basic lock and modify
-        let result = mutex.with_lock(|value| {
+        let result = mutex.write(|value| {
             *value += 1;
             *value
         });
         assert_eq!(result, 1);
 
         // Verify the value was persisted
-        let result = mutex.with_lock(|value| *value);
+        let result = mutex.read(|value| *value);
         assert_eq!(result, 1);
     }
 
@@ -45,7 +45,7 @@ mod arc_mutex_tests {
     fn test_arc_mutex_try_with_lock_success() {
         let mutex = ArcMutex::new(42);
 
-        let result = mutex.try_with_lock(|value| *value).unwrap();
+        let result = mutex.try_read(|value| *value).unwrap();
         assert_eq!(result, 42);
     }
 
@@ -55,14 +55,14 @@ mod arc_mutex_tests {
         let mutex_clone = mutex.clone();
 
         // Test that cloned lock shares data
-        let result = mutex_clone.with_lock(|value| {
+        let result = mutex_clone.write(|value| {
             *value += 1;
             *value
         });
         assert_eq!(result, 1);
 
         // Verify that original lock can see changes
-        let result = mutex.with_lock(|value| *value);
+        let result = mutex.read(|value| *value);
         assert_eq!(result, 1);
     }
 
@@ -76,7 +76,7 @@ mod arc_mutex_tests {
 
         // Hold the lock in another thread
         let handle = thread::spawn(move || {
-            mutex_clone.with_lock(|value| {
+            mutex_clone.write(|value| {
                 *value += 1;
                 // Notify main thread that it can try to acquire the lock
                 barrier_clone.wait();
@@ -89,7 +89,7 @@ mod arc_mutex_tests {
         barrier.wait();
 
         // Try to acquire lock, should return None
-        let result = mutex.try_with_lock(|value| *value);
+        let result = mutex.try_read(|value| *value);
         assert!(
             result.is_none(),
             "Expected None when lock is held by another thread"
@@ -99,7 +99,7 @@ mod arc_mutex_tests {
         handle.join().unwrap();
 
         // Now should be able to successfully acquire the lock
-        let result = mutex.try_with_lock(|value| *value);
+        let result = mutex.try_read(|value| *value);
         assert_eq!(result, Some(1));
     }
 
@@ -113,7 +113,7 @@ mod arc_mutex_tests {
 
         // Hold the lock and panic in another thread
         let handle = thread::spawn(move || {
-            mutex_clone.with_lock(|value| {
+            mutex_clone.write(|value| {
                 *value += 1;
                 // Notify main thread that lock has been acquired
                 barrier_clone.wait();
@@ -129,7 +129,7 @@ mod arc_mutex_tests {
         let _ = handle.join();
 
         // Try to acquire poisoned lock, should return None
-        let result = mutex.try_with_lock(|value| *value);
+        let result = mutex.try_read(|value| *value);
         assert!(
             result.is_none(),
             "Expected None for poisoned lock, got {:?}",
@@ -148,7 +148,7 @@ mod arc_mutex_tests {
 
         // Hold the lock and panic in another thread
         let handle = thread::spawn(move || {
-            mutex_clone.with_lock(|value| {
+            mutex_clone.write(|value| {
                 *value += 1;
                 // Notify main thread that lock has been acquired
                 barrier_clone.wait();
@@ -163,9 +163,9 @@ mod arc_mutex_tests {
         // Wait for child thread to complete panicking (will poison the lock)
         let _ = handle.join();
 
-        // Try to acquire poisoned lock with with_lock (not try_with_lock)
-        // This should panic because with_lock uses unwrap()
-        mutex.with_lock(|_| {});
+        // Try to acquire poisoned lock with read (not try_read)
+        // This should panic because read uses unwrap()
+        mutex.read(|_| {});
     }
 
     #[test]
@@ -179,7 +179,7 @@ mod arc_mutex_tests {
         for _ in 0..10 {
             let mutex = Arc::clone(&mutex);
             let handle = thread::spawn(move || {
-                mutex.with_lock(|value| {
+                mutex.write(|value| {
                     *value += 1;
                 });
             });
@@ -192,7 +192,7 @@ mod arc_mutex_tests {
         }
 
         // Verify final value
-        let result = mutex.with_lock(|value| *value);
+        let result = mutex.read(|value| *value);
         assert_eq!(result, 10);
     }
 
@@ -200,11 +200,11 @@ mod arc_mutex_tests {
     fn test_arc_mutex_with_complex_types() {
         let mutex = ArcMutex::new(String::from("Hello"));
 
-        mutex.with_lock(|s| {
+        mutex.write(|s| {
             s.push_str(" World");
         });
 
-        let result = mutex.with_lock(|s| s.clone());
+        let result = mutex.read(|s| s.clone());
         assert_eq!(result, "Hello World");
     }
 
@@ -212,15 +212,15 @@ mod arc_mutex_tests {
     fn test_arc_mutex_multiple_modifications() {
         let mutex = ArcMutex::new(vec![1, 2, 3]);
 
-        mutex.with_lock(|v| {
+        mutex.write(|v| {
             v.push(4);
         });
 
-        mutex.with_lock(|v| {
+        mutex.write(|v| {
             v.push(5);
         });
 
-        let result = mutex.with_lock(|v| v.clone());
+        let result = mutex.read(|v| v.clone());
         assert_eq!(result, vec![1, 2, 3, 4, 5]);
     }
 
@@ -228,13 +228,13 @@ mod arc_mutex_tests {
     fn test_arc_mutex_return_values() {
         let mutex = ArcMutex::new(vec![1, 2, 3, 4, 5]);
 
-        let sum = mutex.with_lock(|v| v.iter().sum::<i32>());
+        let sum = mutex.read(|v| v.iter().sum::<i32>());
         assert_eq!(sum, 15);
 
-        let len = mutex.with_lock(|v| v.len());
+        let len = mutex.read(|v| v.len());
         assert_eq!(len, 5);
 
-        let first = mutex.with_lock(|v| v[0]);
+        let first = mutex.read(|v| v[0]);
         assert_eq!(first, 1);
     }
 
@@ -245,7 +245,7 @@ mod arc_mutex_tests {
         let mutex1 = mutex.clone();
         let handle1 = thread::spawn(move || {
             for _ in 0..100 {
-                mutex1.with_lock(|value| {
+                mutex1.write(|value| {
                     *value += 1;
                 });
             }
@@ -254,7 +254,7 @@ mod arc_mutex_tests {
         let mutex2 = mutex.clone();
         let handle2 = thread::spawn(move || {
             for _ in 0..100 {
-                mutex2.with_lock(|value| {
+                mutex2.write(|value| {
                     *value += 1;
                 });
             }
@@ -263,7 +263,7 @@ mod arc_mutex_tests {
         handle1.join().unwrap();
         handle2.join().unwrap();
 
-        let result = mutex.with_lock(|value| *value);
+        let result = mutex.read(|value| *value);
         assert_eq!(result, 200);
     }
 
@@ -273,15 +273,15 @@ mod arc_mutex_tests {
 
         let mutex = ArcMutex::new(HashMap::new());
 
-        mutex.with_lock(|map| {
+        mutex.write(|map| {
             map.insert("key1", 10);
             map.insert("key2", 20);
         });
 
-        let value1 = mutex.with_lock(|map| map.get("key1").copied());
+        let value1 = mutex.read(|map| map.get("key1").copied());
         assert_eq!(value1, Some(10));
 
-        let value2 = mutex.with_lock(|map| map.get("key2").copied());
+        let value2 = mutex.read(|map| map.get("key2").copied());
         assert_eq!(value2, Some(20));
     }
 }

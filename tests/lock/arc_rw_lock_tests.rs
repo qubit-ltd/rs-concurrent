@@ -10,7 +10,7 @@
 //!
 //! Tests for the ArcRwLock implementation
 
-use prism3_concurrent::{ArcRwLock, ReadWriteLock};
+use prism3_concurrent::{ArcRwLock, Lock};
 use std::sync::Arc;
 use std::thread;
 
@@ -21,25 +21,25 @@ mod arc_rw_lock_tests {
     #[test]
     fn test_arc_rw_lock_new() {
         let rw_lock = ArcRwLock::new(42);
-        let result = rw_lock.with_read_lock(|value| *value);
+        let result = rw_lock.read(|value| *value);
         assert_eq!(result, 42);
     }
 
     #[test]
-    fn test_arc_rw_lock_with_read_lock() {
+    fn test_arc_rw_lock_read() {
         let rw_lock = ArcRwLock::new(0);
 
         // Test read lock
-        let result = rw_lock.with_read_lock(|value| *value);
+        let result = rw_lock.read(|value| *value);
         assert_eq!(result, 0);
     }
 
     #[test]
-    fn test_arc_rw_lock_with_write_lock() {
+    fn test_arc_rw_lock_write() {
         let rw_lock = ArcRwLock::new(0);
 
         // Test write lock
-        let result = rw_lock.with_write_lock(|value| {
+        let result = rw_lock.write(|value| {
             *value += 1;
             *value
         });
@@ -52,14 +52,14 @@ mod arc_rw_lock_tests {
         let rw_lock_clone = rw_lock.clone();
 
         // Test cloned read-write lock
-        let result = rw_lock_clone.with_write_lock(|value| {
+        let result = rw_lock_clone.write(|value| {
             *value += 1;
             *value
         });
         assert_eq!(result, 1);
 
         // Verify that original lock can see changes
-        let result = rw_lock.with_read_lock(|value| *value);
+        let result = rw_lock.read(|value| *value);
         assert_eq!(result, 1);
     }
 
@@ -73,7 +73,7 @@ mod arc_rw_lock_tests {
         for _ in 0..10 {
             let rw_lock = Arc::clone(&rw_lock);
             let handle = thread::spawn(move || {
-                rw_lock.with_read_lock(|data| {
+                rw_lock.read(|data| {
                     // Simulate some read operation
                     thread::sleep(std::time::Duration::from_millis(10));
                     data.iter().sum::<i32>()
@@ -99,7 +99,7 @@ mod arc_rw_lock_tests {
         for _ in 0..10 {
             let rw_lock = Arc::clone(&rw_lock);
             let handle = thread::spawn(move || {
-                rw_lock.with_write_lock(|value| {
+                rw_lock.write(|value| {
                     *value += 1;
                 });
             });
@@ -112,7 +112,7 @@ mod arc_rw_lock_tests {
         }
 
         // Verify final value (should be 10 if writes are exclusive)
-        let result = rw_lock.with_read_lock(|value| *value);
+        let result = rw_lock.read(|value| *value);
         assert_eq!(result, 10);
     }
 
@@ -121,12 +121,12 @@ mod arc_rw_lock_tests {
         let rw_lock = ArcRwLock::new(String::from("Hello"));
 
         // Write operation
-        rw_lock.with_write_lock(|s| {
+        rw_lock.write(|s| {
             s.push_str(" World");
         });
 
         // Read operation should see the change
-        let result = rw_lock.with_read_lock(|s| s.clone());
+        let result = rw_lock.read(|s| s.clone());
         assert_eq!(result, "Hello World");
     }
 
@@ -135,17 +135,17 @@ mod arc_rw_lock_tests {
         let rw_lock = ArcRwLock::new(vec![1, 2, 3]);
 
         // Multiple readers can access concurrently
-        let len = rw_lock.with_read_lock(|v| v.len());
+        let len = rw_lock.read(|v| v.len());
         assert_eq!(len, 3);
 
         // Writer modifies the data
-        rw_lock.with_write_lock(|v| {
+        rw_lock.write(|v| {
             v.push(4);
             v.push(5);
         });
 
         // Reader sees the updated data
-        let sum = rw_lock.with_read_lock(|v| v.iter().sum::<i32>());
+        let sum = rw_lock.read(|v| v.iter().sum::<i32>());
         assert_eq!(sum, 15);
     }
 
@@ -153,14 +153,14 @@ mod arc_rw_lock_tests {
     fn test_arc_rw_lock_read_lock_returns_closure_result() {
         let rw_lock = ArcRwLock::new(vec![10, 20, 30]);
 
-        let result = rw_lock.with_read_lock(|v| {
+        let result = rw_lock.read(|v| {
             v.iter().map(|&x| x * 2).collect::<Vec<_>>()
         });
 
         assert_eq!(result, vec![20, 40, 60]);
 
         // Original should be unchanged
-        let original = rw_lock.with_read_lock(|v| v.clone());
+        let original = rw_lock.read(|v| v.clone());
         assert_eq!(original, vec![10, 20, 30]);
     }
 
@@ -168,7 +168,7 @@ mod arc_rw_lock_tests {
     fn test_arc_rw_lock_write_lock_returns_closure_result() {
         let rw_lock = ArcRwLock::new(5);
 
-        let result = rw_lock.with_write_lock(|value| {
+        let result = rw_lock.write(|value| {
             *value *= 2;
             *value
         });
@@ -176,7 +176,7 @@ mod arc_rw_lock_tests {
         assert_eq!(result, 10);
 
         // Verify the value was actually modified
-        let current = rw_lock.with_read_lock(|value| *value);
+        let current = rw_lock.read(|value| *value);
         assert_eq!(current, 10);
     }
 
@@ -191,7 +191,7 @@ mod arc_rw_lock_tests {
             let rw_lock = Arc::clone(&rw_lock);
             let handle = thread::spawn(move || {
                 for _ in 0..10 {
-                    rw_lock.with_read_lock(|value| {
+                    rw_lock.read(|value| {
                         let _ = *value;
                     });
                 }
@@ -204,7 +204,7 @@ mod arc_rw_lock_tests {
             let rw_lock = Arc::clone(&rw_lock);
             let handle = thread::spawn(move || {
                 for _ in 0..10 {
-                    rw_lock.with_write_lock(|value| {
+                    rw_lock.write(|value| {
                         *value += 1;
                     });
                 }
@@ -218,7 +218,7 @@ mod arc_rw_lock_tests {
         }
 
         // Verify final value
-        let result = rw_lock.with_read_lock(|value| *value);
+        let result = rw_lock.read(|value| *value);
         assert_eq!(result, 50); // 5 writers × 10 increments each
     }
 
@@ -232,7 +232,7 @@ mod arc_rw_lock_tests {
 
         // Poison the lock by panicking while holding write lock
         let handle = thread::spawn(move || {
-            rw_lock_clone.with_write_lock(|value| {
+            rw_lock_clone.write(|value| {
                 *value += 1;
                 panic!("intentional panic to poison the lock");
             });
@@ -242,7 +242,7 @@ mod arc_rw_lock_tests {
         let _ = handle.join();
 
         // Try to acquire read lock on poisoned lock, should panic
-        rw_lock.with_read_lock(|_| {});
+        rw_lock.read(|_| {});
     }
 
     #[test]
@@ -255,7 +255,7 @@ mod arc_rw_lock_tests {
 
         // Poison the lock by panicking while holding write lock
         let handle = thread::spawn(move || {
-            rw_lock_clone.with_write_lock(|value| {
+            rw_lock_clone.write(|value| {
                 *value += 1;
                 panic!("intentional panic to poison the lock");
             });
@@ -265,7 +265,7 @@ mod arc_rw_lock_tests {
         let _ = handle.join();
 
         // Try to acquire write lock on poisoned lock, should panic
-        rw_lock.with_write_lock(|_| {});
+        rw_lock.write(|_| {});
     }
 
     #[test]
@@ -275,7 +275,7 @@ mod arc_rw_lock_tests {
         let rw_lock1 = rw_lock.clone();
         let handle1 = thread::spawn(move || {
             for _ in 0..50 {
-                rw_lock1.with_write_lock(|value| {
+                rw_lock1.write(|value| {
                     *value += 1;
                 });
             }
@@ -284,7 +284,7 @@ mod arc_rw_lock_tests {
         let rw_lock2 = rw_lock.clone();
         let handle2 = thread::spawn(move || {
             for _ in 0..50 {
-                rw_lock2.with_write_lock(|value| {
+                rw_lock2.write(|value| {
                     *value += 1;
                 });
             }
@@ -293,7 +293,7 @@ mod arc_rw_lock_tests {
         handle1.join().unwrap();
         handle2.join().unwrap();
 
-        let result = rw_lock.with_read_lock(|value| *value);
+        let result = rw_lock.read(|value| *value);
         assert_eq!(result, 100);
     }
 
@@ -303,15 +303,15 @@ mod arc_rw_lock_tests {
 
         let rw_lock = ArcRwLock::new(HashMap::new());
 
-        rw_lock.with_write_lock(|map| {
+        rw_lock.write(|map| {
             map.insert("key1", 10);
             map.insert("key2", 20);
         });
 
-        let value1 = rw_lock.with_read_lock(|map| map.get("key1").copied());
+        let value1 = rw_lock.read(|map| map.get("key1").copied());
         assert_eq!(value1, Some(10));
 
-        let value2 = rw_lock.with_read_lock(|map| map.get("key2").copied());
+        let value2 = rw_lock.read(|map| map.get("key2").copied());
         assert_eq!(value2, Some(20));
     }
 }
