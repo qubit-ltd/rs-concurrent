@@ -1,0 +1,89 @@
+/*******************************************************************************
+ *
+ *    Copyright (c) 2025.
+ *    3-Prism Co. Ltd.
+ *
+ *    All rights reserved.
+ *
+ ******************************************************************************/
+//! # Configuration Types
+//!
+//! Provides configuration structures for the double-checked lock executor.
+//!
+//! # Author
+//!
+//! Haixing Hu
+
+/// Log configuration
+///
+/// Configures logging behavior for the executor, including log level
+/// and message content.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use prism3_rust_concurrent::double_checked_lock::LogConfig;
+/// use log::Level;
+///
+/// let log_config = LogConfig {
+///     level: Level::Error,
+///     message: "Service is not running".to_string(),
+/// };
+/// ```
+///
+/// # Author
+///
+/// Haixing Hu
+///
+#[derive(Debug, Clone)]
+pub struct LogConfig {
+    /// Log level for the message
+    pub level: log::Level,
+
+    /// Log message content
+    pub message: String,
+}
+
+/// Executor configuration
+///
+/// Configures various execution options for the double-checked lock
+/// executor, including performance metrics and error handling.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use prism3_rust_concurrent::double_checked_lock::ExecutorConfig;
+///
+/// let config = ExecutorConfig {
+///     enable_metrics: true,
+///     disable_backtrace: false,
+/// };
+/// ```
+///
+/// # Author
+///
+/// Haixing Hu
+///
+#[derive(Debug, Clone)]
+pub struct ExecutorConfig {
+    /// Whether to enable performance metrics collection
+    pub enable_metrics: bool,
+
+    /// Whether to disable error backtrace for performance
+    pub disable_backtrace: bool,
+}
+
+impl Default for ExecutorConfig {
+    /// Creates a default executor configuration
+    ///
+    /// # Returns
+    ///
+    /// Returns a default configuration with metrics disabled and
+    /// backtrace enabled.
+    fn default() -> Self {
+        Self {
+            enable_metrics: false,
+            disable_backtrace: false,
+        }
+    }
+}
