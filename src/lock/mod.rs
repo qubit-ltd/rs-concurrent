@@ -19,9 +19,7 @@
 
 // Trait definitions
 mod lock;
-mod read_write_lock;
 mod async_lock;
-mod async_read_write_lock;
 
 // Implementations
 mod arc_mutex;
@@ -31,9 +29,7 @@ mod arc_async_rw_lock;
 
 // Re-export traits
 pub use lock::Lock;
-pub use read_write_lock::ReadWriteLock;
 pub use async_lock::AsyncLock;
-pub use async_read_write_lock::AsyncReadWriteLock;
 
 // Re-export implementations
 pub use arc_mutex::ArcMutex;
