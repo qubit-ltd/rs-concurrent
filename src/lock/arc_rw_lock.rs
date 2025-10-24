@@ -16,7 +16,7 @@
 //! Haixing Hu
 
 use std::sync::{Arc, RwLock};
-use crate::lock::read_write_lock::ReadWriteLock;
+use crate::lock::Lock;
 
 /// Synchronous Read-Write Lock Wrapper
 ///
@@ -47,15 +47,14 @@ use crate::lock::read_write_lock::ReadWriteLock;
 /// use std::sync::Arc;
 ///
 /// let data = ArcRwLock::new(String::from("Hello"));
-/// let data = Arc::new(data);
 ///
 /// // Multiple read operations can execute concurrently
-/// data.with_read_lock(|s| {
+/// data.read(|s| {
 ///     println!("Read: {}", s);
 /// });
 ///
 /// // Write operations have exclusive access
-/// data.with_write_lock(|s| {
+/// data.write(|s| {
 ///     s.push_str(" World!");
 ///     println!("Write: {}", s);
 /// });
@@ -94,12 +93,13 @@ impl<T> ArcRwLock<T> {
     }
 }
 
-impl<T> ReadWriteLock<T> for ArcRwLock<T> {
-    /// Acquires the read lock and executes an operation
+impl<T> Lock<T> for ArcRwLock<T> {
+    /// Acquires a read lock and executes an operation
     ///
     /// Synchronously acquires the read lock, executes the provided
     /// closure, and then automatically releases the lock. Multiple
-    /// read operations can execute concurrently.
+    /// read operations can execute concurrently, providing better
+    /// performance for read-heavy workloads.
     ///
     /// # Arguments
     ///
@@ -113,14 +113,14 @@ impl<T> ReadWriteLock<T> for ArcRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcRwLock, ReadWriteLock};
+    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
     ///
     /// let data = ArcRwLock::new(vec![1, 2, 3]);
     ///
-    /// let length = data.with_read_lock(|v| v.len());
+    /// let length = data.read(|v| v.len());
     /// println!("Vector length: {}", length);
     /// ```
-    fn with_read_lock<R, F>(&self, f: F) -> R
+    fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R,
     {
@@ -128,7 +128,7 @@ impl<T> ReadWriteLock<T> for ArcRwLock<T> {
         f(&*guard)
     }
 
-    /// Acquires the write lock and executes an operation
+    /// Acquires a write lock and executes an operation
     ///
     /// Synchronously acquires the write lock, executes the provided
     /// closure, and then automatically releases the lock. Write
@@ -147,21 +147,104 @@ impl<T> ReadWriteLock<T> for ArcRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcRwLock, ReadWriteLock};
+    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
     ///
     /// let data = ArcRwLock::new(vec![1, 2, 3]);
     ///
-    /// data.with_write_lock(|v| {
+    /// data.write(|v| {
     ///     v.push(4);
     ///     println!("Added element, new length: {}", v.len());
     /// });
     /// ```
-    fn with_write_lock<R, F>(&self, f: F) -> R
+    fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
     {
         let mut guard = self.inner.write().unwrap();
         f(&mut *guard)
+    }
+
+    /// Attempts to acquire a read lock without blocking
+    ///
+    /// Attempts to immediately acquire the read lock. If the lock is
+    /// currently held by another thread in write mode, returns `None`
+    /// without blocking. This is a non-blocking operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The closure to be executed while holding the read lock
+    ///
+    /// # Returns
+    ///
+    /// * `Some(R)` - If the lock was successfully acquired and the
+    ///   closure executed
+    /// * `None` - If the lock is currently held in write mode
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
+    ///
+    /// let data = ArcRwLock::new(vec![1, 2, 3]);
+    ///
+    /// if let Some(length) = data.try_read(|v| v.len()) {
+    ///     println!("Vector length: {}", length);
+    /// } else {
+    ///     println!("Lock is busy with write operation");
+    /// }
+    /// ```
+    fn try_read<R, F>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&T) -> R,
+    {
+        if let Ok(guard) = self.inner.try_read() {
+            Some(f(&*guard))
+        } else {
+            None
+        }
+    }
+
+    /// Attempts to acquire a write lock without blocking
+    ///
+    /// Attempts to immediately acquire the write lock. If the lock is
+    /// currently held by another thread (in either read or write mode),
+    /// returns `None` without blocking. This is a non-blocking operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The closure to be executed while holding the write lock
+    ///
+    /// # Returns
+    ///
+    /// * `Some(R)` - If the lock was successfully acquired and the
+    ///   closure executed
+    /// * `None` - If the lock is currently held by another thread
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
+    ///
+    /// let data = ArcRwLock::new(vec![1, 2, 3]);
+    ///
+    /// if let Some(new_length) = data.try_write(|v| {
+    ///     v.push(4);
+    ///     v.len()
+    /// }) {
+    ///     println!("New length: {}", new_length);
+    /// } else {
+    ///     println!("Lock is busy");
+    /// }
+    /// ```
+    fn try_write<R, F>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        if let Ok(mut guard) = self.inner.try_write() {
+            Some(f(&mut *guard))
+        } else {
+            None
+        }
     }
 }
 

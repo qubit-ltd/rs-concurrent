@@ -16,7 +16,7 @@
 //! Haixing Hu
 
 use std::sync::{Arc, Mutex};
-use crate::lock::lock::Lock;
+use crate::lock::Lock;
 
 /// Synchronous Mutex Wrapper
 ///
@@ -87,16 +87,47 @@ impl<T> ArcMutex<T> {
 }
 
 impl<T> Lock<T> for ArcMutex<T> {
-    /// Acquires the lock and executes an operation
+    /// Acquires a read lock and executes an operation
     ///
-    /// Synchronously acquires the lock, executes the provided
-    /// closure, and then automatically releases the lock. This is
-    /// the recommended usage pattern as it ensures proper lock
-    /// release.
+    /// For ArcMutex, this acquires the same exclusive lock as write
+    /// operations, but provides immutable access to the data. This
+    /// ensures thread safety while allowing read-only operations.
     ///
     /// # Arguments
     ///
-    /// * `f` - The closure to be executed while holding the lock
+    /// * `f` - The closure to be executed while holding the read lock
+    ///
+    /// # Returns
+    ///
+    /// Returns the result of executing the closure
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use prism3_rust_concurrent::lock::{ArcMutex, Lock};
+    ///
+    /// let counter = ArcMutex::new(42);
+    ///
+    /// let value = counter.read(|c| *c);
+    /// println!("Current value: {}", value);
+    /// ```
+    fn read<R, F>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let guard = self.inner.lock().unwrap();
+        f(&*guard)
+    }
+
+    /// Acquires a write lock and executes an operation
+    ///
+    /// Synchronously acquires the exclusive lock, executes the provided
+    /// closure with mutable access, and then automatically releases
+    /// the lock. This is the recommended usage pattern for modifications.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The closure to be executed while holding the write lock
     ///
     /// # Returns
     ///
@@ -109,14 +140,14 @@ impl<T> Lock<T> for ArcMutex<T> {
     ///
     /// let counter = ArcMutex::new(0);
     ///
-    /// let result = counter.with_lock(|c| {
+    /// let result = counter.write(|c| {
     ///     *c += 1;
     ///     *c
     /// });
     ///
     /// println!("Counter value: {}", result);
     /// ```
-    fn with_lock<R, F>(&self, f: F) -> R
+    fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
     {
@@ -124,15 +155,55 @@ impl<T> Lock<T> for ArcMutex<T> {
         f(&mut *guard)
     }
 
-    /// Attempts to acquire the lock
+    /// Attempts to acquire a read lock without blocking
     ///
-    /// Attempts to immediately acquire the lock. If the lock is
+    /// Attempts to immediately acquire the read lock. If the lock is
     /// already held by another thread, returns `None`. This is a
     /// non-blocking operation.
     ///
     /// # Arguments
     ///
-    /// * `f` - The closure to be executed while holding the lock
+    /// * `f` - The closure to be executed while holding the read lock
+    ///
+    /// # Returns
+    ///
+    /// * `Some(R)` - If the lock was successfully acquired and the
+    ///   closure executed
+    /// * `None` - If the lock is already held by another thread
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use prism3_rust_concurrent::lock::{ArcMutex, Lock};
+    ///
+    /// let counter = ArcMutex::new(42);
+    ///
+    /// if let Some(value) = counter.try_read(|c| *c) {
+    ///     println!("Current value: {}", value);
+    /// } else {
+    ///     println!("Lock is busy");
+    /// }
+    /// ```
+    fn try_read<R, F>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&T) -> R,
+    {
+        if let Ok(guard) = self.inner.try_lock() {
+            Some(f(&*guard))
+        } else {
+            None
+        }
+    }
+
+    /// Attempts to acquire a write lock without blocking
+    ///
+    /// Attempts to immediately acquire the write lock. If the lock is
+    /// already held by another thread, returns `None`. This is a
+    /// non-blocking operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The closure to be executed while holding the write lock
     ///
     /// # Returns
     ///
@@ -147,14 +218,16 @@ impl<T> Lock<T> for ArcMutex<T> {
     ///
     /// let counter = ArcMutex::new(0);
     ///
-    /// // Try to acquire lock
-    /// if let Some(value) = counter.try_with_lock(|c| *c) {
-    ///     println!("Current value: {}", value);
+    /// if let Some(result) = counter.try_write(|c| {
+    ///     *c += 1;
+    ///     *c
+    /// }) {
+    ///     println!("New value: {}", result);
     /// } else {
     ///     println!("Lock is busy");
     /// }
     /// ```
-    fn try_with_lock<R, F>(&self, f: F) -> Option<R>
+    fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
     {
