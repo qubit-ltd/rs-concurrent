@@ -95,17 +95,17 @@ fn main() {
     let data2 = data.clone();
 
     let handle1 = std::thread::spawn(move || {
-        let len = data1.with_read_lock(|v| v.len());
+        let len = data1.read(|v| v.len());
         println!("Length from thread 1: {}", len);
     });
 
     let handle2 = std::thread::spawn(move || {
-        let len = data2.with_read_lock(|v| v.len());
+        let len = data2.read(|v| v.len());
         println!("Length from thread 2: {}", len);
     });
 
     // Exclusive write access
-    data.with_write_lock(|v| {
+    data.write(|v| {
         v.push(4);
         println!("Added element, new length: {}", v.len());
     });
@@ -161,17 +161,17 @@ async fn main() {
     let data2 = data.clone();
 
     let handle1 = tokio::spawn(async move {
-        let content = data1.with_read_lock(|s| s.clone()).await;
+        let content = data1.read(|s| s.clone()).await;
         println!("Read from task 1: {}", content);
     });
 
     let handle2 = tokio::spawn(async move {
-        let content = data2.with_read_lock(|s| s.clone()).await;
+        let content = data2.read(|s| s.clone()).await;
         println!("Read from task 2: {}", content);
     });
 
     // Exclusive async write
-    data.with_write_lock(|s| {
+    data.write(|s| {
         s.push_str(" World!");
         println!("Updated string: {}", s);
     }).await;
@@ -259,8 +259,8 @@ A synchronous read-write lock wrapper supporting multiple concurrent readers.
 
 **Methods:**
 - [`new(data: T) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.new) - Create a new read-write lock
-- [`with_read_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.with_read_lock) - Acquire read lock
-- [`with_write_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.with_write_lock) - Acquire write lock
+- [`read<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.read) - Acquire read lock
+- [`write<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.write) - Acquire write lock
 - [`clone(&self) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.clone) - Clone the Arc reference
 
 ### ArcAsyncMutex
@@ -279,8 +279,8 @@ An asynchronous read-write lock for Tokio runtime.
 
 **Methods:**
 - [`new(data: T) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.new) - Create a new async read-write lock
-- [`async with_read_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.with_read_lock) - Asynchronously acquire read lock
-- [`async with_write_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.with_write_lock) - Asynchronously acquire write lock
+- [`async read<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.read) - Asynchronously acquire read lock
+- [`async write<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.write) - Asynchronously acquire write lock
 - [`clone(&self) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.clone) - Clone the Arc reference
 
 ### Executor
@@ -363,10 +363,10 @@ Read-write locks are ideal for configuration that's read frequently but written 
 let config = ArcRwLock::new(Config::default());
 
 // Many readers
-config.with_read_lock(|cfg| println!("Port: {}", cfg.port));
+config.read(|cfg| println!("Port: {}", cfg.port));
 
 // Occasional writer
-config.with_write_lock(|cfg| cfg.port = 8080);
+config.write(|cfg| cfg.port = 8080);
 ```
 
 ### 3. Async Task Coordination

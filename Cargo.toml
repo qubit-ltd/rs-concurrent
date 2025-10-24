@@ -31,6 +31,10 @@ doctest = false
 tokio = { version = "1.0", features = ["sync"] }
 # Functional programming utilities
 prism3-function = "0.4.0"
+# Error handling
+thiserror = "2.0.17"
+# Logging
+log = "0.4"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "time"] }

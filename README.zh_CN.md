@@ -89,17 +89,17 @@ fn main() {
     let data2 = data.clone();
 
     let handle1 = std::thread::spawn(move || {
-        let len = data1.with_read_lock(|v| v.len());
+        let len = data1.read(|v| v.len());
         println!("线程 1 读取的长度: {}", len);
     });
 
     let handle2 = std::thread::spawn(move || {
-        let len = data2.with_read_lock(|v| v.len());
+        let len = data2.read(|v| v.len());
         println!("线程 2 读取的长度: {}", len);
     });
 
     // 独占写访问
-    data.with_write_lock(|v| {
+    data.write(|v| {
         v.push(4);
         println!("添加元素后，新长度: {}", v.len());
     });
@@ -155,17 +155,17 @@ async fn main() {
     let data2 = data.clone();
 
     let handle1 = tokio::spawn(async move {
-        let content = data1.with_read_lock(|s| s.clone()).await;
+        let content = data1.read(|s| s.clone()).await;
         println!("任务 1 读取: {}", content);
     });
 
     let handle2 = tokio::spawn(async move {
-        let content = data2.with_read_lock(|s| s.clone()).await;
+        let content = data2.read(|s| s.clone()).await;
         println!("任务 2 读取: {}", content);
     });
 
     // 独占异步写入
-    data.with_write_lock(|s| {
+    data.write(|s| {
         s.push_str("，世界！");
         println!("更新后的字符串: {}", s);
     }).await;
@@ -209,8 +209,8 @@ fn main() {
 
 **方法：**
 - [`new(data: T) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.new) - 创建新的读写锁
-- [`with_read_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.with_read_lock) - 获取读锁
-- [`with_write_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.with_write_lock) - 获取写锁
+- [`read<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.read) - 获取读锁
+- [`write<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.write) - 获取写锁
 - [`clone(&self) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcRwLock.html#method.clone) - 克隆 Arc 引用
 
 ### ArcAsyncMutex
@@ -229,8 +229,8 @@ fn main() {
 
 **方法：**
 - [`new(data: T) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.new) - 创建新的异步读写锁
-- [`async with_read_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.with_read_lock) - 异步获取读锁
-- [`async with_write_lock<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.with_write_lock) - 异步获取写锁
+- [`async read<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.read) - 异步获取读锁
+- [`async write<F, R>(&self, f: F) -> R`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.write) - 异步获取写锁
 - [`clone(&self) -> Self`](https://docs.rs/prism3-concurrent/latest/prism3_concurrent/struct.ArcAsyncRwLock.html#method.clone) - 克隆 Arc 引用
 
 ## 设计模式
@@ -287,10 +287,10 @@ thread::spawn(move || {
 let config = ArcRwLock::new(Config::default());
 
 // 多个读者
-config.with_read_lock(|cfg| println!("端口: {}", cfg.port));
+config.read(|cfg| println!("端口: {}", cfg.port));
 
 // 偶尔的写入者
-config.with_write_lock(|cfg| cfg.port = 8080);
+config.write(|cfg| cfg.port = 8080);
 ```
 
 ### 3. 异步任务协调

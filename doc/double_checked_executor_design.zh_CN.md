@@ -346,12 +346,12 @@ pub trait Lock<T: ?Sized> {
 /// 同步读写锁 trait
 pub trait ReadWriteLock<T: ?Sized> {
     /// 获取读锁并执行闭包
-    fn with_read_lock<R, F>(&self, f: F) -> R
+    fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R;
 
     /// 获取写锁并执行闭包
-    fn with_write_lock<R, F>(&self, f: F) -> R
+    fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R;
 }
@@ -634,7 +634,7 @@ where
     ///
     /// # 返回值
     /// 返回 `ExecutionResult<R>`，包含任务的返回值（如果成功）
-    pub fn call_with_write_lock<L, T, F, R>(
+    pub fn call_mut<L, T, F, R>(
         &self,
         lock: &L,
         task: F,
@@ -649,8 +649,8 @@ where
             return ExecutionResult::fail();
         }
 
-        // 使用 ReadWriteLock trait 的 with_write_lock 方法
-        lock.with_write_lock(|data| {
+        // 使用 ReadWriteLock trait 的 write 方法
+        lock.write(|data| {
             // 第二次检查：锁内再次确认
             if !(self.tester)() {
                 self.handle_condition_not_met();
@@ -684,7 +684,7 @@ where
     ///
     /// # 返回值
     /// 返回 `ExecutionResult<R>`，包含任务的返回值（如果成功）
-    pub fn call_with_read_lock<L, T, F, R>(
+    pub fn call<L, T, F, R>(
         &self,
         lock: &L,
         task: F,
@@ -699,8 +699,8 @@ where
             return ExecutionResult::fail();
         }
 
-        // 使用 ReadWriteLock trait 的 with_read_lock 方法
-        lock.with_read_lock(|data| {
+        // 使用 ReadWriteLock trait 的 read 方法
+        lock.read(|data| {
             // 第二次检查：锁内再次确认
             if !(self.tester)() {
                 self.handle_condition_not_met();
@@ -856,7 +856,7 @@ where
     ///
     /// # 返回值
     /// 返回 `ExecutionResult<V>`，包含任务的返回值（如果成功）
-    pub fn call_with_rollback_write_lock<L, T, F, O, Rb, V>(
+    pub fn call_with_rollback_mut<L, T, F, O, Rb, V>(
         &self,
         lock: &L,
         task: F,
@@ -883,8 +883,8 @@ where
             );
         }
 
-        // 使用 ReadWriteLock trait 的 with_write_lock 方法
-        let result = lock.with_write_lock(|data| {
+        // 使用 ReadWriteLock trait 的 write 方法
+        let result = lock.write(|data| {
             // 第二次检查
             if !(self.tester)() {
                 self.handle_condition_not_met();
@@ -1343,7 +1343,7 @@ impl Cache {
     /// 读取缓存（使用读锁）
     pub fn get(&self, key: &str) -> Option<String> {
         let key = key.to_string();
-        let result = self.executor.call_with_read_lock(&self.data, |cache| {
+        let result = self.executor.call(&self.data, |cache| {
             Ok(cache.get(&key).cloned())
         });
 
@@ -1352,7 +1352,7 @@ impl Cache {
 
     /// 写入缓存（使用写锁）
     pub fn set(&self, key: String, value: String) -> Result<(), Box<dyn std::error::Error>> {
-        let result = self.executor.call_with_write_lock(&self.data, |cache| {
+        let result = self.executor.call_mut(&self.data, |cache| {
             cache.insert(key, value);
             Ok(())
         });
@@ -1430,7 +1430,7 @@ use prism3_rust_concurrent::lock::ArcRwLock;
 let state = ArcRwLock::new(State::Running);
 let state_clone = state.clone();
 builder.tester_fn(move || {
-    state_clone.with_read_lock(|s| *s == State::Running)
+    state_clone.read(|s| *s == State::Running)
 })
 
 // ❌ 错误方案：普通 Rc<RefCell<T>>（不是线程安全的）
@@ -1519,15 +1519,15 @@ let value = executor.call(&data, |v| Ok(*v)).into_result()?;
 
 - [ ] 实现 `execute()` 方法（使用 `Lock` trait）
 - [ ] 实现 `call()` 方法（使用 `Lock` trait）
-- [ ] 实现 `call_with_write_lock()` 方法（使用 `ReadWriteLock` trait）
-- [ ] 实现 `call_with_read_lock()` 方法（使用 `ReadWriteLock` trait）
+- [ ] 实现 `call_mut()` 方法（使用 `ReadWriteLock` trait）
+- [ ] 实现 `call()` 方法（使用 `ReadWriteLock` trait）
 - [ ] 实现内部辅助方法（`handle_condition_not_met`、`run_rollback`）
 
 ### 10.3 第三阶段：高级功能
 
 - [ ] 实现 `execute_with_rollback()` 方法
 - [ ] 实现 `call_with_rollback()` 方法
-- [ ] 实现 `call_with_rollback_write_lock()` 方法
+- [ ] 实现 `call_with_rollback_mut()` 方法
 - [ ] 集成 `prism3-rust-clock` 的 `TimeMeter`（可选）
 - [ ] 实现异步版本支持（`AsyncLock` trait）（未来）
 
