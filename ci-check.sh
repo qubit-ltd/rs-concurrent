@@ -37,14 +37,23 @@ echo "🚀 Starting local CI checks..."
 echo ""
 
 # Check 1: Code formatting
-print_step "1/6 Checking code format (cargo fmt)..."
-if cargo fmt -- --check > /dev/null 2>&1; then
+print_step "1/6 Checking code format (cargo +nightly fmt)..."
+
+# Check if nightly toolchain is installed
+if ! rustup toolchain list | grep -q nightly; then
+    print_warning "Nightly toolchain not found, installing..."
+    rustup toolchain install nightly
+fi
+
+if cargo +nightly fmt -- --check > /dev/null 2>&1; then
     print_success "Code format check passed"
 else
     print_error "Code format check failed"
     echo ""
     echo "Please run the following command to fix formatting issues:"
-    echo "  cargo fmt"
+    echo "  cargo +nightly fmt"
+    echo "Or use the format script:"
+    echo "  ./format.sh"
     exit 1
 fi
 echo ""
