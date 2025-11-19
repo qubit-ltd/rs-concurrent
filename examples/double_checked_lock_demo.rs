@@ -15,12 +15,18 @@
 //! Haixing Hu
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{
+        AtomicBool,
+        Ordering,
+    },
     Arc,
 };
 
 use prism3_concurrent::{
-    lock::{ArcMutex, Lock},
+    lock::{
+        ArcMutex,
+        Lock,
+    },
     DoubleCheckedLock,
 };
 
