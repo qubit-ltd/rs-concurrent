@@ -14,7 +14,10 @@
 //!
 //! Haixing Hu
 
-use std::{future::Future, pin::Pin};
+use std::{
+    future::Future,
+    pin::Pin,
+};
 
 /// Runnable task trait
 ///
