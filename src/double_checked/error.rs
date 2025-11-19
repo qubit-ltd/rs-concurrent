@@ -13,7 +13,6 @@
 //! # Author
 //!
 //! Haixing Hu
-
 use thiserror::Error;
 
 /// Executor error types

@@ -47,4 +47,3 @@ pub struct Configuring;
 ///
 /// Haixing Hu
 pub struct Conditioned;
-

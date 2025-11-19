@@ -15,7 +15,10 @@
 //! Haixing Hu
 use std::error::Error;
 
-use prism3_function::{BoxSupplierOnce, SupplierOnce};
+use prism3_function::{
+    BoxSupplierOnce,
+    SupplierOnce,
+};
 
 /// Task execution result
 ///
@@ -253,7 +256,9 @@ impl<T> ExecutionContext<T> {
         if !self.result.success {
             let boxed = rollback_action.into_box();
             self.rollback_action = Some(BoxSupplierOnce::new(move || {
-                boxed.get().map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+                boxed
+                    .get()
+                    .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
             }));
         }
         self
