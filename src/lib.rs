@@ -16,10 +16,26 @@ pub mod executor;
 pub mod lock;
 
 pub use double_checked::{
-    BuilderError, DoubleCheckedLock, ExecutionBuilder, ExecutionResult, ExecutorError,
+    BuilderError,
+    DoubleCheckedLock,
+    ExecutionBuilder,
+    ExecutionResult,
+    ExecutorError,
     LogConfig,
 };
 pub use executor::{
-    AsyncExecutor, AsyncExecutorService, Callable, Executor, ExecutorService, Runnable,
+    AsyncExecutor,
+    AsyncExecutorService,
+    Callable,
+    Executor,
+    ExecutorService,
+    Runnable,
 };
-pub use lock::{ArcAsyncMutex, ArcAsyncRwLock, ArcMutex, ArcRwLock, AsyncLock, Lock};
+pub use lock::{
+    ArcAsyncMutex,
+    ArcAsyncRwLock,
+    ArcMutex,
+    ArcRwLock,
+    AsyncLock,
+    Lock,
+};
