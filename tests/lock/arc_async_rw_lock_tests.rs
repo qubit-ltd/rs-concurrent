@@ -12,7 +12,10 @@
 
 use std::sync::Arc;
 
-use prism3_concurrent::{ArcAsyncRwLock, AsyncLock};
+use prism3_concurrent::{
+    ArcAsyncRwLock,
+    AsyncLock,
+};
 
 #[cfg(test)]
 mod arc_async_rw_lock_tests {

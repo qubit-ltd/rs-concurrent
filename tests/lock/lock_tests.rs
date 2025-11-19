@@ -11,11 +11,18 @@
 //! Tests for the Lock trait and its implementations for std::sync::Mutex and std::sync::RwLock
 
 use std::{
-    sync::{Arc, Barrier},
+    sync::{
+        Arc,
+        Barrier,
+    },
     thread,
 };
 
-use prism3_concurrent::lock::{ArcMutex, ArcRwLock, Lock};
+use prism3_concurrent::lock::{
+    ArcMutex,
+    ArcRwLock,
+    Lock,
+};
 
 #[cfg(test)]
 mod lock_trait_tests {

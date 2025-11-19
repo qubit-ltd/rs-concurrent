@@ -10,9 +10,15 @@
 //!
 //! Tests for the ArcRwLock implementation
 
-use std::{sync::Arc, thread};
+use std::{
+    sync::Arc,
+    thread,
+};
 
-use prism3_concurrent::{ArcRwLock, Lock};
+use prism3_concurrent::{
+    ArcRwLock,
+    Lock,
+};
 
 #[cfg(test)]
 mod arc_rw_lock_tests {

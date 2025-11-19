@@ -12,14 +12,21 @@ mod tests {
         error::Error,
         fmt,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{
+                AtomicBool,
+                Ordering,
+            },
             Arc,
         },
     };
 
     use prism3_concurrent::{
         double_checked::DoubleCheckedLock,
-        lock::{ArcMutex, ArcRwLock, Lock},
+        lock::{
+            ArcMutex,
+            ArcRwLock,
+            Lock,
+        },
     };
 
     #[derive(Debug)]

@@ -10,7 +10,11 @@
 //!
 //! Tests for the AsyncLock trait and its implementations for tokio::sync::Mutex and tokio::sync::RwLock
 
-use prism3_concurrent::lock::{ArcAsyncMutex, ArcAsyncRwLock, AsyncLock};
+use prism3_concurrent::lock::{
+    ArcAsyncMutex,
+    ArcAsyncRwLock,
+    AsyncLock,
+};
 
 #[cfg(test)]
 mod async_lock_trait_tests {
@@ -65,7 +69,10 @@ mod async_lock_trait_tests {
     async fn test_async_mutex_try_with_lock_returns_none_when_locked() {
         use std::{
             sync::{
-                atomic::{AtomicBool, Ordering},
+                atomic::{
+                    AtomicBool,
+                    Ordering,
+                },
                 Arc,
             },
             time::Duration,

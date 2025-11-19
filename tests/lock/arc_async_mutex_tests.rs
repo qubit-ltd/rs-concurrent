@@ -12,7 +12,10 @@
 
 use std::sync::Arc;
 
-use prism3_concurrent::{ArcAsyncMutex, AsyncLock};
+use prism3_concurrent::{
+    ArcAsyncMutex,
+    AsyncLock,
+};
 
 #[cfg(test)]
 mod arc_async_mutex_tests {
