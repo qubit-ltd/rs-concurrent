@@ -312,10 +312,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
 
 [[package]]
+name = "prism3-atomic"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2d9929fd343ba5dea0cfa8ee84dcc4906223fd8872c37539fda6c7f3685a4e3"
+
+[[package]]
 name = "prism3-concurrent"
 version = "0.2.0"
 dependencies = [
  "log",
+ "prism3-atomic",
  "prism3-core",
  "prism3-function",
  "thiserror",
