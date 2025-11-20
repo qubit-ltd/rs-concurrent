@@ -56,8 +56,8 @@ mod tests {
             })
             .get_result();
 
-        assert!(result.success);
-        assert_eq!(result.value, Some(11));
+        assert!(result.is_success());
+        assert_eq!(result.into_result().unwrap(), Some(11));
         assert_eq!(data.read(|d| *d), 11);
     }
 
@@ -74,8 +74,8 @@ mod tests {
             .call(|value: &i32| Ok::<i32, TestError>(*value))
             .get_result();
 
-        assert!(result.success);
-        assert_eq!(result.value, Some(10));
+        assert!(result.is_success());
+        assert_eq!(result.into_result().unwrap(), Some(10));
         assert_eq!(data.read(|d| *d), 10);
     }
 
@@ -95,9 +95,8 @@ mod tests {
             })
             .get_result();
 
-        assert!(!result.success);
-        assert!(result.value.is_none());
-        assert!(result.error.is_none()); // Unmet condition is not an error
+        assert!(!result.is_success());
+        assert!(result.is_unmet());
         assert_eq!(data.read(|d| *d), 10);
     }
 
@@ -125,9 +124,8 @@ mod tests {
             })
             .get_result();
 
-        assert!(!result.success);
-        assert!(result.value.is_none());
-        assert!(result.error.is_some());
+        assert!(!result.is_success());
+        assert!(result.is_failed());
         assert_eq!(data.read(|d| *d), 11); // value was still changed before failure
         assert!(rollback_called.load(Ordering::Acquire));
     }
@@ -149,9 +147,8 @@ mod tests {
             })
             .get_result();
 
-        assert!(!result.success);
-        assert!(result.value.is_none());
-        assert!(result.error.is_some());
+        assert!(!result.is_success());
+        assert!(result.is_failed());
         assert_eq!(data.read(|d| *d), 10); // task should not have run
     }
 }

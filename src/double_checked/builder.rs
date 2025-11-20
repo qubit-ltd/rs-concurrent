@@ -39,7 +39,10 @@ use super::{
     ExecutionResult,
     LogConfig,
 };
-use crate::lock::Lock;
+use crate::{
+    double_checked::error::ExecutorError,
+    lock::Lock,
+};
 
 /// Execution builder (using typestate pattern)
 ///
@@ -132,6 +135,17 @@ where
 
     /// Sets the test condition (required)
     ///
+    /// # Safety Warning
+    ///
+    /// The `tester` closure is executed twice: first without the lock (fast
+    /// path) and then with the lock held (slow path).
+    ///
+    /// For the first check (fast path) to be thread-safe, the `tester` closure
+    /// MUST access shared state using atomic operations with appropriate memory
+    /// ordering (e.g., `Ordering::SeqCst` or `Ordering::Acquire`). Relying on
+    /// non-atomic shared state without locking leads to data races and
+    /// undefined behavior.
+    ///
     /// # State Transition
     ///
     /// Initial → Conditioned
@@ -185,6 +199,17 @@ where
     }
 
     /// Sets the test condition (required)
+    ///
+    /// # Safety Warning
+    ///
+    /// The `tester` closure is executed twice: first without the lock (fast
+    /// path) and then with the lock held (slow path).
+    ///
+    /// For the first check (fast path) to be thread-safe, the `tester` closure
+    /// MUST access shared state using atomic operations with appropriate memory
+    /// ordering (e.g., `Ordering::SeqCst` or `Ordering::Acquire`). Relying on
+    /// non-atomic shared state without locking leads to data races and
+    /// undefined behavior.
     ///
     /// # State Transition
     ///
@@ -265,7 +290,7 @@ where
     /// # Arguments
     ///
     /// * `task` - Any type that implements `FunctionOnce<T, Result<R, E>>`
-    pub fn call<F, R, E>(self, task: F) -> ExecutionContext<R>
+    pub fn call<F, R, E>(self, task: F) -> ExecutionContext<R, E>
     where
         F: FunctionOnce<T, Result<R, E>> + 'static,
         E: Error + Send + Sync + 'static,
@@ -286,7 +311,7 @@ where
     ///
     /// * `task` - Any type that implements
     ///   `MutatingFunctionOnce<T, Result<R, E>>`
-    pub fn call_mut<F, R, E>(self, task: F) -> ExecutionContext<R>
+    pub fn call_mut<F, R, E>(self, task: F) -> ExecutionContext<R, E>
     where
         F: MutatingFunctionOnce<T, Result<R, E>> + 'static,
         E: Error + Send + Sync + 'static,
@@ -302,7 +327,7 @@ where
     /// # Arguments
     ///
     /// * `task` - Any type that implements `FunctionOnce<T, Result<(), E>>`
-    pub fn execute<F, E>(self, task: F) -> ExecutionContext<()>
+    pub fn execute<F, E>(self, task: F) -> ExecutionContext<(), E>
     where
         F: FunctionOnce<T, Result<(), E>> + 'static,
         E: Error + Send + Sync + 'static,
@@ -316,7 +341,7 @@ where
     ///
     /// * `task` - Any type that implements
     ///   `MutatingFunctionOnce<T, Result<(), E>>`
-    pub fn execute_mut<F, E>(self, task: F) -> ExecutionContext<()>
+    pub fn execute_mut<F, E>(self, task: F) -> ExecutionContext<(), E>
     where
         F: MutatingFunctionOnce<T, Result<(), E>> + 'static,
         E: Error + Send + Sync + 'static,
@@ -331,7 +356,7 @@ where
     fn execute_with_read_lock<R, E>(
         mut self,
         task: BoxFunctionOnce<T, Result<R, E>>,
-    ) -> ExecutionResult<R>
+    ) -> ExecutionResult<R, E>
     where
         E: Error + Send + Sync + 'static,
     {
@@ -344,14 +369,16 @@ where
             if let Some(ref log_config) = self.logger {
                 log::log!(log_config.level, "{}", log_config.message);
             }
-            return ExecutionResult::unmet();
+            return ExecutionResult::ConditionNotMet;
         }
 
         // Execute prepare action
         if let Some(prepare_action) = self.prepare_action.take() {
             if let Err(e) = prepare_action.get() {
                 log::error!("Prepare action failed: {}", e);
-                return ExecutionResult::fail_with_box(e);
+                return ExecutionResult::Failed(ExecutorError::PrepareFailed(
+                    e.to_string(),
+                ));
             }
         }
 
@@ -362,18 +389,20 @@ where
                 if let Some(ref log_config) = self.logger {
                     log::log!(log_config.level, "{}", log_config.message);
                 }
-                return ExecutionResult::unmet();
+                return ExecutionResult::ConditionNotMet;
             }
             // Execute task
-            task.apply(data)
-                .map_or_else(ExecutionResult::fail, ExecutionResult::succeed)
+            match task.apply(data) {
+                Ok(v) => ExecutionResult::Success(v),
+                Err(e) => ExecutionResult::Failed(ExecutorError::TaskFailed(e)),
+            }
         })
     }
 
     fn execute_with_write_lock<R, E>(
         mut self,
         task: BoxMutatingFunctionOnce<T, Result<R, E>>,
-    ) -> ExecutionResult<R>
+    ) -> ExecutionResult<R, E>
     where
         E: Error + Send + Sync + 'static,
     {
@@ -386,14 +415,16 @@ where
             if let Some(ref log_config) = self.logger {
                 log::log!(log_config.level, "{}", log_config.message);
             }
-            return ExecutionResult::unmet();
+            return ExecutionResult::ConditionNotMet;
         }
 
         // Execute prepare action
         if let Some(prepare_action) = self.prepare_action.take() {
             if let Err(e) = prepare_action.get() {
                 log::error!("Prepare action failed: {}", e);
-                return ExecutionResult::fail_with_box(e);
+                return ExecutionResult::Failed(ExecutorError::PrepareFailed(
+                    e.to_string(),
+                ));
             }
         }
 
@@ -404,11 +435,13 @@ where
                 if let Some(ref log_config) = self.logger {
                     log::log!(log_config.level, "{}", log_config.message);
                 }
-                return ExecutionResult::unmet();
+                return ExecutionResult::ConditionNotMet;
             }
             // Execute task
-            task.apply(data)
-                .map_or_else(ExecutionResult::fail, ExecutionResult::succeed)
+            match task.apply(data) {
+                Ok(v) => ExecutionResult::Success(v),
+                Err(e) => ExecutionResult::Failed(ExecutorError::TaskFailed(e)),
+            }
         })
     }
 }

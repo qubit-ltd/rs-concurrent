@@ -62,8 +62,8 @@ use crate::lock::Lock;
 ///     })
 ///     .get_result();
 ///
-/// assert!(result.success);
-/// assert_eq!(result.value, Some(42));
+/// assert!(result.is_success());
+/// assert_eq!(result.unwrap(), 42);
 /// ```
 ///
 /// ## Simple Write Operation
@@ -81,7 +81,7 @@ use crate::lock::Lock;
 ///     })
 ///     .get_result();
 ///
-/// assert!(result.success);
+/// assert!(result.is_success());
 /// assert_eq!(data.read(|v| *v), 100);
 /// ```
 ///
@@ -100,8 +100,8 @@ use crate::lock::Lock;
 ///     })
 ///     .get_result();
 ///
-/// assert!(result.success);
-/// assert_eq!(result.value, Some(1));
+/// assert!(result.is_success());
+/// assert_eq!(result.unwrap(), 1);
 /// ```
 ///
 /// ## Error Handling
@@ -125,8 +125,7 @@ use crate::lock::Lock;
 ///     })
 ///     .get_result();
 ///
-/// assert!(!result.success);
-/// assert!(result.error.is_some());
+/// assert!(result.is_failed());
 /// ```
 ///
 /// ## Basic Usage - Lazy Initialization
@@ -158,7 +157,7 @@ use crate::lock::Lock;
 ///     })
 ///     .get_result();
 ///
-/// assert!(result.success);
+/// assert!(result.is_success());
 /// assert!(initialized.load());
 /// ```
 ///
@@ -214,7 +213,7 @@ use crate::lock::Lock;
 ///     })
 ///     .get_result();
 ///
-/// assert!(result.success);
+/// assert!(result.is_success());
 /// assert!(connection_opened.load());
 /// ```
 ///
@@ -242,8 +241,8 @@ use crate::lock::Lock;
 ///     })
 ///     .get_result();
 ///
-/// assert!(result.success);
-/// assert_eq!(result.value, Some(Some(42)));
+/// assert!(result.is_success());
+/// assert_eq!(result.unwrap(), Some(42));
 /// ```
 ///
 /// # Author
@@ -274,8 +273,8 @@ impl DoubleCheckedLock {
     ///     })
     ///     .get_result();
     ///
-    /// assert!(result.success);
-    /// assert_eq!(result.value, Some(42));
+    /// assert!(result.is_success());
+    /// assert_eq!(result.unwrap(), 42);
     /// ```
     ///
     /// ## Basic write operation
@@ -293,7 +292,7 @@ impl DoubleCheckedLock {
     ///     })
     ///     .get_result();
     ///
-    /// assert!(result.success);
+    /// assert!(result.is_success());
     /// assert_eq!(data.read(|v| *v), 100);
     /// ```
     ///
@@ -312,8 +311,8 @@ impl DoubleCheckedLock {
     ///     })
     ///     .get_result();
     ///
-    /// assert!(result.success);
-    /// assert_eq!(result.value, Some(1));
+    /// assert!(result.is_success());
+    /// assert_eq!(result.unwrap(), 1);
     /// ```
     ///
     /// # Type Parameters

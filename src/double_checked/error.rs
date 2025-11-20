@@ -50,14 +50,11 @@ pub enum ExecutorError<E>
 where
     E: std::fmt::Display,
 {
-    /// Condition not met error
-    ConditionNotMet,
-
-    /// Condition not met with custom message
-    ConditionNotMetWithMessage(String),
-
     /// Task execution failed with original error
     TaskFailed(E),
+
+    /// Preparation action failed
+    PrepareFailed(String),
 
     /// Rollback operation failed
     RollbackFailed {
@@ -77,14 +74,11 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExecutorError::ConditionNotMet => {
-                write!(f, "Double-checked lock condition not met")
-            }
-            ExecutorError::ConditionNotMetWithMessage(msg) => {
-                write!(f, "Double-checked lock condition not met: {}", msg)
-            }
             ExecutorError::TaskFailed(e) => {
                 write!(f, "Task execution failed: {}", e)
+            }
+            ExecutorError::PrepareFailed(msg) => {
+                write!(f, "Preparation action failed: {}", msg)
             }
             ExecutorError::RollbackFailed { original, rollback } => {
                 write!(
@@ -102,31 +96,6 @@ where
 
 impl<E> std::error::Error for ExecutorError<E> where E: std::fmt::Display + std::fmt::Debug {}
 
-/// Execution result type alias
-///
-/// A convenient type alias for `Result<R, ExecutorError<E>>`, used as
-/// the return type for executor methods.
-///
-/// # Type Parameters
-///
-/// * `R` - The success value type
-/// * `E` - The task error type
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// use prism3_rust_concurrent::double_checked::ExecutionResult;
-///
-/// fn process_data() -> ExecutionResult<i32, String> {
-///     Ok(42)
-/// }
-/// ```
-///
-/// # Author
-///
-/// Haixing Hu
-///
-pub type ExecutionResult<R, E> = Result<R, ExecutorError<E>>;
 
 /// Builder error types
 ///

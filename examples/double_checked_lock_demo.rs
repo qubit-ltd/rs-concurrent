@@ -59,8 +59,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .get_result();
 
-    if result.success {
-        println!("Unexpected success: {}", result.value.unwrap());
+    if result.is_success() {
+        println!("Unexpected success: {}", result.unwrap());
     } else {
         println!("Expected failure: Condition not met.");
     }
@@ -84,10 +84,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .get_result();
 
-    if result.success {
-        println!("Success: new value = {}", result.value.unwrap());
+    if result.is_success() {
+        println!("Success: new value = {}", result.unwrap());
     } else {
-        println!("Unexpected failure: {:?}", result.error);
+        println!("Unexpected failure: {:?}", result);
     }
 
     // Verify the data was updated
@@ -112,8 +112,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .get_result();
 
-    if result.success {
-        println!("Unexpected success: {}", result.value.unwrap());
+    if result.is_success() {
+        println!("Unexpected success: {}", result.unwrap());
     } else {
         println!("Expected failure: Condition not met.");
     }

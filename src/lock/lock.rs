@@ -73,8 +73,15 @@ use std::sync::{
 pub trait Lock<T: ?Sized> {
     /// Acquires a read lock and executes a closure
     ///
-    /// This method provides immutable access to the protected data. For
-    /// exclusive locks (Mutex), this acquires the same exclusive lock as
+    /// This method provides immutable access to the protected data. It ensures
+    /// proper memory barriers are established:
+    ///
+    /// - **Acquire semantics**: Ensures that all subsequent memory operations
+    ///   see the effects of previous operations released by the lock release.
+    /// - **Release semantics**: Ensures that all previous memory operations are
+    ///   visible to subsequent lock acquisitions when the lock is released.
+    ///
+    /// For exclusive locks (Mutex), this acquires the same exclusive lock as
     /// write operations. For read-write locks (RwLock), this acquires a
     /// shared lock allowing concurrent readers.
     ///
@@ -121,9 +128,16 @@ pub trait Lock<T: ?Sized> {
 
     /// Acquires a write lock and executes a closure
     ///
-    /// This method provides mutable access to the protected data. For all
-    /// lock types, this acquires an exclusive lock that blocks all other
-    /// operations until the closure completes.
+    /// This method provides mutable access to the protected data. It ensures
+    /// proper memory barriers are established:
+    ///
+    /// - **Acquire semantics**: Ensures that all subsequent memory operations
+    ///   see the effects of previous operations released by the lock release.
+    /// - **Release semantics**: Ensures that all previous memory operations are
+    ///   visible to subsequent lock acquisitions when the lock is released.
+    ///
+    /// For all lock types, this acquires an exclusive lock that blocks all
+    /// other operations until the closure completes.
     ///
     /// # Use Cases
     ///

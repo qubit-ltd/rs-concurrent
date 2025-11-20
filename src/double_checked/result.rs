@@ -20,170 +20,96 @@ use prism3_function::{
     SupplierOnce,
 };
 
+use crate::double_checked::error::ExecutorError;
+
 /// Task execution result
 ///
-/// Represents the result of executing a task, including success status,
-/// return value, and error information. Similar to Java's `Result<T>` class
-/// but renamed to avoid confusion with Rust's standard `Result` type.
+/// Represents the result of executing a task using an enum to clearly distinguish
+/// between success, unmet conditions, and failure.
 ///
 /// # Type Parameters
 ///
 /// * `T` - The type of the return value when execution succeeds
+/// * `E` - The type of the error when execution fails
 ///
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::double_checked::ExecutionResult;
+/// use prism3_rust_concurrent::double_checked::{ExecutionResult, ExecutorError};
 ///
-/// let result = ExecutionResult::succeed(42);
-/// if result.success {
-///     println!("Value: {}", result.value.unwrap());
+/// let success: ExecutionResult<i32, String> = ExecutionResult::Success(42);
+/// if let ExecutionResult::Success(val) = success {
+///     println!("Value: {}", val);
 /// }
 ///
-/// let failed = ExecutionResult::fail("Task failed");
-/// if !failed.success {
-///     println!("Error: {:?}", failed.error);
-/// }
+/// let unmet: ExecutionResult<i32, String> = ExecutionResult::ConditionNotMet;
+///
+/// let failed: ExecutionResult<i32, String> =
+///     ExecutionResult::Failed(ExecutorError::TaskFailed("Task failed".to_string()));
 /// ```
 ///
 /// # Author
 ///
 /// Haixing Hu
-///
-pub struct ExecutionResult<T> {
-    /// Whether the execution was successful
-    pub success: bool,
+#[derive(Debug)]
+pub enum ExecutionResult<T, E>
+where
+    E: std::fmt::Display,
+{
+    /// Execution succeeded with a value
+    Success(T),
 
-    /// The return value when execution succeeds (only present when success =
-    /// true)
-    pub value: Option<T>,
+    /// Double-checked locking condition was not met
+    ConditionNotMet,
 
-    /// The error information when execution fails (only present when success =
-    /// false)
-    pub error: Option<Box<dyn Error + Send + Sync>>,
+    /// Execution failed with an error
+    Failed(ExecutorError<E>),
 }
 
-impl<T> ExecutionResult<T> {
-    /// Creates a successful execution result
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The return value of the successful execution
-    ///
-    /// # Returns
-    ///
-    /// Returns a new `ExecutionResult` with success = true and the given value
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use prism3_rust_concurrent::double_checked::ExecutionResult;
-    ///
-    /// let result = ExecutionResult::succeed(42);
-    /// assert!(result.success);
-    /// assert_eq!(result.value, Some(42));
-    /// ```
-    pub fn succeed(value: T) -> Self {
-        Self {
-            success: true,
-            value: Some(value),
-            error: None,
+impl<T, E> ExecutionResult<T, E>
+where
+    E: std::fmt::Display,
+{
+    /// Checks if the execution was successful
+    pub fn is_success(&self) -> bool {
+        matches!(self, ExecutionResult::Success(_))
+    }
+
+    /// Checks if the condition was not met
+    pub fn is_unmet(&self) -> bool {
+        matches!(self, ExecutionResult::ConditionNotMet)
+    }
+
+    /// Checks if the execution failed
+    pub fn is_failed(&self) -> bool {
+        matches!(self, ExecutionResult::Failed(_))
+    }
+
+    /// Unwraps the success value, panicking if not successful
+    pub fn unwrap(self) -> T {
+        match self {
+            ExecutionResult::Success(v) => v,
+            ExecutionResult::ConditionNotMet => {
+                panic!("Called unwrap on ExecutionResult::ConditionNotMet")
+            }
+            ExecutionResult::Failed(e) => {
+                panic!("Called unwrap on ExecutionResult::Failed: {}", e)
+            }
         }
     }
 
-    /// Creates an execution result for unmet conditions
-    ///
-    /// This method is used when the double-checked lock condition is not met.
-    /// It represents a normal execution path where the task should not be
-    /// executed, rather than an error condition.
+    /// Converts the result to a standard Result
     ///
     /// # Returns
     ///
-    /// Returns a new `ExecutionResult` with success = false and no error
-    /// message
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use prism3_rust_concurrent::double_checked::ExecutionResult;
-    ///
-    /// let result = ExecutionResult::unmet();
-    /// assert!(!result.success);
-    /// assert!(result.value.is_none());
-    /// assert!(result.error.is_none());
-    /// ```
-    pub fn unmet() -> Self {
-        Self {
-            success: false,
-            value: None,
-            error: None,
-        }
-    }
-
-    /// Creates a failed execution result with error information
-    ///
-    /// # Arguments
-    ///
-    /// * `error` - The error that caused the execution to fail
-    ///
-    /// # Returns
-    ///
-    /// Returns a new `ExecutionResult` with success = false and the given error
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use prism3_rust_concurrent::double_checked::ExecutionResult;
-    ///
-    /// let result = ExecutionResult::fail("Task failed");
-    /// assert!(!result.success);
-    /// assert!(result.value.is_none());
-    /// assert!(result.error.is_some());
-    /// ```
-    pub fn fail<E>(error: E) -> Self
-    where
-        E: Error + Send + Sync + 'static,
-    {
-        Self {
-            success: false,
-            value: None,
-            error: Some(Box::new(error)),
-        }
-    }
-
-    /// Creates a failed execution result from a boxed error
-    pub fn fail_with_box(error: Box<dyn Error + Send + Sync>) -> Self {
-        Self {
-            success: false,
-            value: None,
-            error: Some(error),
-        }
-    }
-
-    /// Converts the execution result to a standard Result
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(T)` - If execution was successful, returns the value
-    /// * `Err(Box<dyn Error + Send + Sync>)` - If execution failed, returns the
-    ///   error
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use prism3_rust_concurrent::double_checked::ExecutionResult;
-    ///
-    /// let result = ExecutionResult::succeed(42);
-    /// match result.into_result() {
-    ///     Ok(value) => println!("Success: {}", value),
-    ///     Err(e) => println!("Error: {}", e),
-    /// }
-    /// ```
-    pub fn into_result(self) -> Result<T, Box<dyn Error + Send + Sync>> {
-        if self.success {
-            Ok(self.value.unwrap())
-        } else {
-            Err(self.error.unwrap_or_else(|| "Unknown error".into()))
+    /// * `Ok(Some(T))` - If execution was successful
+    /// * `Ok(None)` - If condition was not met
+    /// * `Err(ExecutorError<E>)` - If execution failed
+    pub fn into_result(self) -> Result<Option<T>, ExecutorError<E>> {
+        match self {
+            ExecutionResult::Success(v) => Ok(Some(v)),
+            ExecutionResult::ConditionNotMet => Ok(None),
+            ExecutionResult::Failed(e) => Err(e),
         }
     }
 }
@@ -191,47 +117,35 @@ impl<T> ExecutionResult<T> {
 /// Execution context (state after task execution)
 ///
 /// This type provides rollback and result retrieval functionality after
-/// task execution. It holds the execution result and optionally sets
+/// task execution. It holds the execution status and optionally sets
 /// rollback operations.
 ///
 /// # Type Parameters
 ///
 /// * `T` - The type of the task return value
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// use prism3_concurrent::{DoubleCheckedLock, lock::ArcMutex};
-///
-/// let data = ArcMutex::new(42);
-/// let context = DoubleCheckedLock::on(&data)
-///     .when(|| true)
-///     .call(|value| Ok(*value));
-///
-/// // Optionally set rollback
-/// let result = context
-///     .rollback(|| {
-///         println!("Rolling back");
-///         Ok(())
-///     })
-///     .get_result();
-/// ```
+/// * `E` - The type of the task error
 ///
 /// # Author
 ///
 /// Haixing Hu
-pub struct ExecutionContext<T> {
-    result: ExecutionResult<T>,
+pub struct ExecutionContext<T, E>
+where
+    E: std::fmt::Display,
+{
+    result: ExecutionResult<T, E>,
     rollback_action: Option<BoxSupplierOnce<Result<(), Box<dyn Error + Send + Sync>>>>,
 }
 
-impl<T> ExecutionContext<T> {
+impl<T, E> ExecutionContext<T, E>
+where
+    E: std::fmt::Display,
+{
     /// Creates a new execution context
     ///
     /// # Arguments
     ///
     /// * `result` - The execution result
-    pub(super) fn new(result: ExecutionResult<T>) -> Self {
+    pub(super) fn new(result: ExecutionResult<T, E>) -> Self {
         Self {
             result,
             rollback_action: None,
@@ -243,17 +157,17 @@ impl<T> ExecutionContext<T> {
     /// # Arguments
     ///
     /// * `rollback_action` - Any type that implements
-    ///   `SupplierOnce<Result<(), E>>`
+    ///   `SupplierOnce<Result<(), RE>>`
     ///
     /// # Note
     ///
-    /// Rollback is only set and executed when `success = false`
-    pub fn rollback<S, E>(mut self, rollback_action: S) -> Self
+    /// Rollback is only set and executed when `result` is `Failed`.
+    pub fn rollback<S, RE>(mut self, rollback_action: S) -> Self
     where
-        S: SupplierOnce<Result<(), E>> + 'static,
-        E: Error + Send + Sync + 'static,
+        S: SupplierOnce<Result<(), RE>> + 'static,
+        RE: Error + Send + Sync + 'static,
     {
-        if !self.result.success {
+        if let ExecutionResult::Failed(_) = self.result {
             let boxed = rollback_action.into_box();
             self.rollback_action = Some(BoxSupplierOnce::new(move || {
                 boxed
@@ -267,12 +181,20 @@ impl<T> ExecutionContext<T> {
     /// Gets the execution result (consumes the context)
     ///
     /// If rollback is set and execution failed, rollback will be executed
-    /// before returning the result
-    pub fn get_result(mut self) -> ExecutionResult<T> {
-        if !self.result.success {
+    /// before returning the result.
+    ///
+    /// If rollback execution fails, the error in the returned result will be
+    /// updated to `RollbackFailed`.
+    pub fn get_result(mut self) -> ExecutionResult<T, E> {
+        if let ExecutionResult::Failed(ref mut original_error) = self.result {
             if let Some(rollback_action) = self.rollback_action.take() {
-                if let Err(e) = rollback_action.get() {
-                    log::error!("Rollback action failed: {}", e);
+                if let Err(rollback_error) = rollback_action.get() {
+                    log::error!("Rollback action failed: {}", rollback_error);
+                    // Update the error to RollbackFailed
+                    *original_error = ExecutorError::RollbackFailed {
+                        original: original_error.to_string(),
+                        rollback: rollback_error.to_string(),
+                    };
                 }
             }
         }
@@ -280,23 +202,26 @@ impl<T> ExecutionContext<T> {
     }
 
     /// Checks the execution result (does not consume the context)
-    pub fn peek_result(&self) -> &ExecutionResult<T> {
+    pub fn peek_result(&self) -> &ExecutionResult<T, E> {
         &self.result
     }
 
     /// Checks if execution was successful
     pub fn is_success(&self) -> bool {
-        self.result.success
+        self.result.is_success()
     }
 }
 
 // Convenience methods for cases without return values
-impl ExecutionContext<()> {
+impl<E> ExecutionContext<(), E>
+where
+    E: std::fmt::Display,
+{
     /// Completes execution (for operations without return values)
     ///
     /// Returns whether the execution was successful
     pub fn finish(self) -> bool {
         let result = self.get_result();
-        result.success
+        result.is_success()
     }
 }

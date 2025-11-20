@@ -19,6 +19,7 @@ pub use double_checked::{
     BuilderError,
     DoubleCheckedLock,
     ExecutionBuilder,
+    ExecutionContext,
     ExecutionResult,
     ExecutorError,
     LogConfig,
