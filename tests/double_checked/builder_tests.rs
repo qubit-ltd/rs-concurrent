@@ -22,7 +22,7 @@ mod tests {
     use prism3_concurrent::{
         double_checked::DoubleCheckedLock,
         lock::{
-            ArcStdMutex as ArcStdMutex,
+            ArcStdMutex,
             Lock,
         },
     };
@@ -38,7 +38,8 @@ mod tests {
             let configured = builder.logger(log::Level::Info, "Test message");
 
             // Verify it transitions to Configuring state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> = configured;
+            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+                configured;
         }
 
         #[test]
@@ -49,7 +50,8 @@ mod tests {
             let conditioned = builder.when(|| true);
 
             // Verify it transitions to Conditioned state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> = conditioned;
+            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+                conditioned;
         }
     }
 
@@ -65,7 +67,8 @@ mod tests {
             let configuring = configuring.logger(log::Level::Warn, "Second message");
 
             // Should stay in Configuring state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> = configuring;
+            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+                configuring;
         }
 
         #[test]
@@ -77,7 +80,8 @@ mod tests {
             let conditioned = configuring.when(|| true);
 
             // Should transition to Conditioned state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> = conditioned;
+            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+                conditioned;
         }
     }
 
@@ -92,7 +96,8 @@ mod tests {
             let prepared = builder.prepare(|| Ok::<(), io::Error>(()));
 
             // Should stay in Conditioned state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> = prepared;
+            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+                prepared;
         }
 
         #[test]
@@ -335,7 +340,7 @@ mod tests {
                     let prepare_count = prepare_count.clone();
                     move || {
                         prepare_count.store(false, Ordering::Release); // Reset to false to show override
-                        prepare_count.store(true, Ordering::Release);  // Then set to true
+                        prepare_count.store(true, Ordering::Release); // Then set to true
                         Ok::<(), io::Error>(())
                     }
                 })
@@ -348,7 +353,10 @@ mod tests {
 
         #[test]
         fn test_execution_builder_condition_changes_between_checks() {
-            use std::sync::atomic::{AtomicI32, Ordering};
+            use std::sync::atomic::{
+                AtomicI32,
+                Ordering,
+            };
 
             let data = ArcStdMutex::new(10);
             let call_count = Arc::new(AtomicI32::new(0));
@@ -390,7 +398,10 @@ mod tests {
 
         #[test]
         fn test_execution_builder_write_lock_condition_changes_between_checks() {
-            use std::sync::atomic::{AtomicI32, Ordering};
+            use std::sync::atomic::{
+                AtomicI32,
+                Ordering,
+            };
 
             let data = ArcStdMutex::new(10);
             let call_count = Arc::new(AtomicI32::new(0));

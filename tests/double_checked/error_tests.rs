@@ -39,7 +39,10 @@ mod tests {
                 rollback: "Rollback error".to_string(),
             };
             let display = format!("{}", error);
-            assert_eq!(display, "Rollback failed: original error = Original error, rollback error = Rollback error");
+            assert_eq!(
+                display,
+                "Rollback failed: original error = Original error, rollback error = Rollback error"
+            );
         }
 
         #[test]

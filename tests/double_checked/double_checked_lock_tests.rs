@@ -23,8 +23,8 @@ mod tests {
     use prism3_concurrent::{
         double_checked::DoubleCheckedLock,
         lock::{
-            ArcStdMutex,
             ArcRwLock,
+            ArcStdMutex,
             Lock,
         },
     };

@@ -21,7 +21,7 @@ mod tests {
 
     use prism3_concurrent::{
         double_checked::DoubleCheckedLock,
-        lock::ArcStdMutex as ArcStdMutex,
+        lock::ArcStdMutex,
     };
 
     mod test_execution_context {
@@ -35,7 +35,10 @@ mod tests {
                 .call(|value: &i32| Ok::<i32, io::Error>(*value));
 
             assert!(context.is_success());
-            assert!(matches!(context.peek_result(), prism3_concurrent::double_checked::ExecutionResult::Success(42)));
+            assert!(matches!(
+                context.peek_result(),
+                prism3_concurrent::double_checked::ExecutionResult::Success(42)
+            ));
         }
 
         #[test]
@@ -53,7 +56,9 @@ mod tests {
             let data = ArcStdMutex::new(42);
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Test error")));
+                .call(|_value: &i32| {
+                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Test error"))
+                });
 
             assert!(!context.is_success());
         }
@@ -66,7 +71,10 @@ mod tests {
                 .call(|value: &i32| Ok::<i32, io::Error>(*value));
 
             let final_result = context.get_result();
-            assert!(matches!(final_result, prism3_concurrent::double_checked::ExecutionResult::Success(100)));
+            assert!(matches!(
+                final_result,
+                prism3_concurrent::double_checked::ExecutionResult::Success(100)
+            ));
         }
 
         #[test]
@@ -77,7 +85,10 @@ mod tests {
                 .call(|value: &i32| Ok::<i32, io::Error>(*value));
 
             let final_result = context.get_result();
-            assert!(matches!(final_result, prism3_concurrent::double_checked::ExecutionResult::ConditionNotMet));
+            assert!(matches!(
+                final_result,
+                prism3_concurrent::double_checked::ExecutionResult::ConditionNotMet
+            ));
         }
 
         #[test]
@@ -85,10 +96,15 @@ mod tests {
             let data = ArcStdMutex::new(42);
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error")));
+                .call(|_value: &i32| {
+                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error"))
+                });
 
             let final_result = context.get_result();
-            if let prism3_concurrent::double_checked::ExecutionResult::Failed(prism3_concurrent::double_checked::ExecutorError::TaskFailed(e)) = final_result {
+            if let prism3_concurrent::double_checked::ExecutionResult::Failed(
+                prism3_concurrent::double_checked::ExecutorError::TaskFailed(e),
+            ) = final_result
+            {
                 assert!(e.to_string().contains("Original error"));
             } else {
                 panic!("Expected TaskFailed error");
@@ -102,7 +118,9 @@ mod tests {
 
             let mut context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error")));
+                .call(|_value: &i32| {
+                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error"))
+                });
 
             let rollback_called_clone = rollback_called.clone();
             context = context.rollback(move || {
@@ -116,7 +134,10 @@ mod tests {
             assert!(rollback_called.load(Ordering::Acquire));
 
             // Check that the result is still the original error since rollback succeeded
-            if let prism3_concurrent::double_checked::ExecutionResult::Failed(prism3_concurrent::double_checked::ExecutorError::TaskFailed(e)) = final_result {
+            if let prism3_concurrent::double_checked::ExecutionResult::Failed(
+                prism3_concurrent::double_checked::ExecutorError::TaskFailed(e),
+            ) = final_result
+            {
                 assert!(e.to_string().contains("Original error"));
             } else {
                 panic!("Expected TaskFailed error");
@@ -128,16 +149,23 @@ mod tests {
             let data = ArcStdMutex::new(42);
             let mut context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error")));
+                .call(|_value: &i32| {
+                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error"))
+                });
 
-            context = context.rollback(|| {
-                Err(io::Error::new(io::ErrorKind::Other, "Rollback failed"))
-            });
+            context =
+                context.rollback(|| Err(io::Error::new(io::ErrorKind::Other, "Rollback failed")));
 
             let final_result = context.get_result();
 
             // Check that the result is now RollbackFailed
-            if let prism3_concurrent::double_checked::ExecutionResult::Failed(prism3_concurrent::double_checked::ExecutorError::RollbackFailed { original, rollback }) = final_result {
+            if let prism3_concurrent::double_checked::ExecutionResult::Failed(
+                prism3_concurrent::double_checked::ExecutorError::RollbackFailed {
+                    original,
+                    rollback,
+                },
+            ) = final_result
+            {
                 assert!(original.contains("Original error"));
                 assert!(rollback.contains("Rollback failed"));
             } else {
@@ -195,7 +223,10 @@ mod tests {
                 .call(|value: &i32| Ok::<i32, io::Error>(*value));
 
             let peeked = context.peek_result();
-            assert!(matches!(peeked, prism3_concurrent::double_checked::ExecutionResult::Success(123)));
+            assert!(matches!(
+                peeked,
+                prism3_concurrent::double_checked::ExecutionResult::Success(123)
+            ));
         }
 
         #[test]

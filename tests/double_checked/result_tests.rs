@@ -12,10 +12,8 @@ mod tests {
         ExecutionResult,
         ExecutorError,
     };
-    use prism3_concurrent::{
-        DoubleCheckedLock,
-    };
     use prism3_concurrent::lock::ArcStdMutex;
+    use prism3_concurrent::DoubleCheckedLock;
 
     mod test_execution_result {
         use super::*;
@@ -133,7 +131,8 @@ mod tests {
             assert_eq!(result.unwrap(), vec![1, 2, 3]);
 
             // Test with Option
-            let result = ExecutionResult::<Option<String>, String>::Success(Some("test".to_string()));
+            let result =
+                ExecutionResult::<Option<String>, String>::Success(Some("test".to_string()));
             assert!(result.is_success());
             assert_eq!(result.unwrap(), Some("test".to_string()));
         }
@@ -161,7 +160,10 @@ mod tests {
                 .call(|value: &i32| Ok::<i32, io::Error>(*value));
 
             assert!(context.is_success());
-            assert!(matches!(context.peek_result(), ExecutionResult::Success(42)));
+            assert!(matches!(
+                context.peek_result(),
+                ExecutionResult::Success(42)
+            ));
 
             let final_result = context.get_result();
             assert!(matches!(final_result, ExecutionResult::Success(42)));
@@ -175,7 +177,10 @@ mod tests {
                 .call(|value: &i32| Ok::<i32, io::Error>(*value));
 
             assert!(!context.is_success());
-            assert!(matches!(context.peek_result(), ExecutionResult::ConditionNotMet));
+            assert!(matches!(
+                context.peek_result(),
+                ExecutionResult::ConditionNotMet
+            ));
 
             let final_result = context.get_result();
             assert!(matches!(final_result, ExecutionResult::ConditionNotMet));
@@ -186,7 +191,9 @@ mod tests {
             let data = ArcStdMutex::new(42);
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed")));
+                .call(|_value: &i32| {
+                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                });
 
             assert!(!context.is_success());
             assert!(matches!(context.peek_result(), ExecutionResult::Failed(_)));
@@ -200,7 +207,9 @@ mod tests {
             let data = ArcStdMutex::new(42);
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed")))
+                .call(|_value: &i32| {
+                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                })
                 .rollback(|| Ok::<(), io::Error>(()));
 
             let final_result = context.get_result();
@@ -213,12 +222,17 @@ mod tests {
             let data = ArcStdMutex::new(42);
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed")))
+                .call(|_value: &i32| {
+                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                })
                 .rollback(|| Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Rollback failed")));
 
             let final_result = context.get_result();
             // Should be RollbackFailed
-            assert!(matches!(final_result, ExecutionResult::Failed(ExecutorError::RollbackFailed { .. })));
+            assert!(matches!(
+                final_result,
+                ExecutionResult::Failed(ExecutorError::RollbackFailed { .. })
+            ));
         }
 
         #[test]
@@ -227,7 +241,9 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|value: &i32| Ok::<i32, io::Error>(*value))
-                .rollback(|| Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Should not execute")));
+                .rollback(|| {
+                    Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Should not execute"))
+                });
 
             let final_result = context.get_result();
             // Should still be success
@@ -240,7 +256,9 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| false)
                 .call(|value: &i32| Ok::<i32, io::Error>(*value))
-                .rollback(|| Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Should not execute")));
+                .rollback(|| {
+                    Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Should not execute"))
+                });
 
             let final_result = context.get_result();
             // Should still be condition not met
@@ -262,7 +280,9 @@ mod tests {
             let data = ArcStdMutex::new(());
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .execute(|_value: &()| Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Task failed")));
+                .execute(|_value: &()| {
+                    Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                });
 
             assert!(!context.finish());
         }

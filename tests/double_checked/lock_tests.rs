@@ -13,8 +13,8 @@ mod tests {
     use prism3_concurrent::{
         double_checked::DoubleCheckedLock,
         lock::{
-            ArcStdMutex as ArcStdMutex,
             ArcRwLock,
+            ArcStdMutex,
             Lock,
         },
     };
@@ -29,7 +29,8 @@ mod tests {
             let builder = DoubleCheckedLock::on(&data);
 
             // Verify the builder type
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> = builder;
+            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+                builder;
         }
 
         #[test]
@@ -39,7 +40,11 @@ mod tests {
             let builder = DoubleCheckedLock::on(&data);
 
             // Verify the builder type
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcRwLock<String>, String, _> = builder;
+            let _: prism3_concurrent::double_checked::ExecutionBuilder<
+                ArcRwLock<String>,
+                String,
+                _,
+            > = builder;
         }
 
         #[test]
