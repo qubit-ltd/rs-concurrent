@@ -1,4 +1,7 @@
-use prism3_concurrent::{lock::ArcStdMutex, Lock};
+use prism3_concurrent::{
+    lock::ArcStdMutex,
+    Lock,
+};
 
 fn main() {
     println!("Testing ArcStdMutex Clone functionality...");
