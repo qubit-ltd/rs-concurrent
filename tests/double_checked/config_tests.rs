@@ -1,14 +1,14 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
  ******************************************************************************/
 #[cfg(test)]
 mod tests {
-    use prism3_concurrent::double_checked::{
+    use qubit_concurrent::double_checked::{
         ExecutorConfig,
         LogConfig,
     };

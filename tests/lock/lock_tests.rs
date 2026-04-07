@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -23,7 +23,7 @@ use std::sync::{
     RwLock,
 };
 
-use prism3_concurrent::lock::{
+use qubit_concurrent::lock::{
     ArcRwLock,
     ArcStdMutex,
     Lock,

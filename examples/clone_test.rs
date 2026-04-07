@@ -1,4 +1,4 @@
-use prism3_concurrent::{
+use qubit_concurrent::{
     lock::ArcStdMutex,
     Lock,
 };

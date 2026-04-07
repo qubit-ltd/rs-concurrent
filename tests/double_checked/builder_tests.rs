@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -19,7 +19,7 @@ mod tests {
         },
     };
 
-    use prism3_concurrent::{
+    use qubit_concurrent::{
         double_checked::DoubleCheckedLock,
         lock::{
             ArcStdMutex,
@@ -38,7 +38,7 @@ mod tests {
             let configured = builder.logger(log::Level::Info, "Test message");
 
             // Verify it transitions to Configuring state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+            let _: qubit_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
                 configured;
         }
 
@@ -50,7 +50,7 @@ mod tests {
             let conditioned = builder.when(|| true);
 
             // Verify it transitions to Conditioned state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+            let _: qubit_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
                 conditioned;
         }
     }
@@ -67,7 +67,7 @@ mod tests {
             let configuring = configuring.logger(log::Level::Warn, "Second message");
 
             // Should stay in Configuring state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+            let _: qubit_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
                 configuring;
         }
 
@@ -80,7 +80,7 @@ mod tests {
             let conditioned = configuring.when(|| true);
 
             // Should transition to Conditioned state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+            let _: qubit_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
                 conditioned;
         }
     }
@@ -96,7 +96,7 @@ mod tests {
             let prepared = builder.prepare(|| Ok::<(), io::Error>(()));
 
             // Should stay in Conditioned state
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+            let _: qubit_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
                 prepared;
         }
 

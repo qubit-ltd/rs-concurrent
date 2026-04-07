@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -19,7 +19,7 @@ mod tests {
         },
     };
 
-    use prism3_concurrent::{
+    use qubit_concurrent::{
         double_checked::DoubleCheckedLock,
         lock::ArcStdMutex,
     };
@@ -37,7 +37,7 @@ mod tests {
             assert!(context.is_success());
             assert!(matches!(
                 context.peek_result(),
-                prism3_concurrent::double_checked::ExecutionResult::Success(42)
+                qubit_concurrent::double_checked::ExecutionResult::Success(42)
             ));
         }
 
@@ -73,7 +73,7 @@ mod tests {
             let final_result = context.get_result();
             assert!(matches!(
                 final_result,
-                prism3_concurrent::double_checked::ExecutionResult::Success(100)
+                qubit_concurrent::double_checked::ExecutionResult::Success(100)
             ));
         }
 
@@ -87,7 +87,7 @@ mod tests {
             let final_result = context.get_result();
             assert!(matches!(
                 final_result,
-                prism3_concurrent::double_checked::ExecutionResult::ConditionNotMet
+                qubit_concurrent::double_checked::ExecutionResult::ConditionNotMet
             ));
         }
 
@@ -101,8 +101,8 @@ mod tests {
                 });
 
             let final_result = context.get_result();
-            if let prism3_concurrent::double_checked::ExecutionResult::Failed(
-                prism3_concurrent::double_checked::ExecutorError::TaskFailed(e),
+            if let qubit_concurrent::double_checked::ExecutionResult::Failed(
+                qubit_concurrent::double_checked::ExecutorError::TaskFailed(e),
             ) = final_result
             {
                 assert!(e.to_string().contains("Original error"));
@@ -134,8 +134,8 @@ mod tests {
             assert!(rollback_called.load(Ordering::Acquire));
 
             // Check that the result is still the original error since rollback succeeded
-            if let prism3_concurrent::double_checked::ExecutionResult::Failed(
-                prism3_concurrent::double_checked::ExecutorError::TaskFailed(e),
+            if let qubit_concurrent::double_checked::ExecutionResult::Failed(
+                qubit_concurrent::double_checked::ExecutorError::TaskFailed(e),
             ) = final_result
             {
                 assert!(e.to_string().contains("Original error"));
@@ -159,8 +159,8 @@ mod tests {
             let final_result = context.get_result();
 
             // Check that the result is now RollbackFailed
-            if let prism3_concurrent::double_checked::ExecutionResult::Failed(
-                prism3_concurrent::double_checked::ExecutorError::RollbackFailed {
+            if let qubit_concurrent::double_checked::ExecutionResult::Failed(
+                qubit_concurrent::double_checked::ExecutorError::RollbackFailed {
                     original,
                     rollback,
                 },
@@ -225,7 +225,7 @@ mod tests {
             let peeked = context.peek_result();
             assert!(matches!(
                 peeked,
-                prism3_concurrent::double_checked::ExecutionResult::Success(123)
+                qubit_concurrent::double_checked::ExecutionResult::Success(123)
             ));
         }
 

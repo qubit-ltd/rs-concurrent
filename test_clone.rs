@@ -1,4 +1,4 @@
-use prism3_concurrent::lock::ArcStdMutex;
+use qubit_concurrent::lock::ArcStdMutex;
 
 fn main() {
     // Test Clone with different types

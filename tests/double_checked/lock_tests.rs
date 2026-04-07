@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -10,7 +10,7 @@
 mod tests {
     use std::io;
 
-    use prism3_concurrent::{
+    use qubit_concurrent::{
         double_checked::DoubleCheckedLock,
         lock::{
             ArcRwLock,
@@ -29,7 +29,7 @@ mod tests {
             let builder = DoubleCheckedLock::on(&data);
 
             // Verify the builder type
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
+            let _: qubit_concurrent::double_checked::ExecutionBuilder<ArcStdMutex<i32>, i32, _> =
                 builder;
         }
 
@@ -40,7 +40,7 @@ mod tests {
             let builder = DoubleCheckedLock::on(&data);
 
             // Verify the builder type
-            let _: prism3_concurrent::double_checked::ExecutionBuilder<
+            let _: qubit_concurrent::double_checked::ExecutionBuilder<
                 ArcRwLock<String>,
                 String,
                 _,

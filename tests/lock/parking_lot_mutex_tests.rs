@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -19,7 +19,7 @@ use std::{
 };
 
 use parking_lot::Mutex as ParkingLotMutex;
-use prism3_concurrent::lock::Lock;
+use qubit_concurrent::lock::Lock;
 
 #[cfg(test)]
 mod parking_lot_mutex_tests {

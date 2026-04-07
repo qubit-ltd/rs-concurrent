@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -10,7 +10,7 @@
 mod tests {
     use std::io;
 
-    use prism3_concurrent::double_checked::{
+    use qubit_concurrent::double_checked::{
         BuilderError,
         ExecutorError,
     };
