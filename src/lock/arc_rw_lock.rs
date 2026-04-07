@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -47,7 +47,7 @@ use crate::lock::Lock;
 /// # Usage Example
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::lock::{ArcRwLock, ReadWriteLock};
+/// use qubit_concurrent::lock::{ArcRwLock, ReadWriteLock};
 /// use std::sync::Arc;
 ///
 /// let data = ArcRwLock::new(String::from("Hello"));
@@ -86,7 +86,7 @@ impl<T> ArcRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::ArcRwLock;
+    /// use qubit_concurrent::lock::ArcRwLock;
     ///
     /// let rw_lock = ArcRwLock::new(vec![1, 2, 3]);
     /// ```
@@ -117,7 +117,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
+    /// use qubit_concurrent::lock::{ArcRwLock, Lock};
     ///
     /// let data = ArcRwLock::new(vec![1, 2, 3]);
     ///
@@ -151,7 +151,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
+    /// use qubit_concurrent::lock::{ArcRwLock, Lock};
     ///
     /// let data = ArcRwLock::new(vec![1, 2, 3]);
     ///
@@ -187,7 +187,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
+    /// use qubit_concurrent::lock::{ArcRwLock, Lock};
     ///
     /// let data = ArcRwLock::new(vec![1, 2, 3]);
     ///
@@ -227,7 +227,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcRwLock, Lock};
+    /// use qubit_concurrent::lock::{ArcRwLock, Lock};
     ///
     /// let data = ArcRwLock::new(vec![1, 2, 3]);
     ///

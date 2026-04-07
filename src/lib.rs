@@ -1,12 +1,12 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
  ******************************************************************************/
-//! # Prism3 Concurrent - Concurrency Utilities Library
+//! # Qubit Concurrent - Concurrency Utilities Library
 //!
 //! # Author
 //!

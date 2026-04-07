@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -43,7 +43,7 @@ use crate::lock::Lock;
 /// # Usage Example
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::lock::{ArcMutex, Lock};
+/// use qubit_concurrent::lock::{ArcMutex, Lock};
 /// use std::sync::Arc;
 ///
 /// let counter = ArcMutex::new(0);
@@ -83,7 +83,7 @@ impl<T> ArcMutex<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::ArcMutex;
+    /// use qubit_concurrent::lock::ArcMutex;
     ///
     /// let lock = ArcMutex::new(42);
     /// ```
@@ -112,7 +112,7 @@ impl<T> Lock<T> for ArcMutex<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcMutex, Lock};
+    /// use qubit_concurrent::lock::{ArcMutex, Lock};
     ///
     /// let counter = ArcMutex::new(42);
     ///
@@ -144,7 +144,7 @@ impl<T> Lock<T> for ArcMutex<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcMutex, Lock};
+    /// use qubit_concurrent::lock::{ArcMutex, Lock};
     ///
     /// let counter = ArcMutex::new(0);
     ///
@@ -182,7 +182,7 @@ impl<T> Lock<T> for ArcMutex<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcMutex, Lock};
+    /// use qubit_concurrent::lock::{ArcMutex, Lock};
     ///
     /// let counter = ArcMutex::new(42);
     ///
@@ -222,7 +222,7 @@ impl<T> Lock<T> for ArcMutex<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcMutex, Lock};
+    /// use qubit_concurrent::lock::{ArcMutex, Lock};
     ///
     /// let counter = ArcMutex::new(0);
     ///

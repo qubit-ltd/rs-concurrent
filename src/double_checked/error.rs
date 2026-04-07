@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -28,7 +28,7 @@ use thiserror::Error;
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::double_checked::ExecutorError;
+/// use qubit_concurrent::double_checked::ExecutorError;
 ///
 /// let error: ExecutorError<String> =
 ///     ExecutorError::ConditionNotMet;
@@ -104,7 +104,7 @@ impl<E> std::error::Error for ExecutorError<E> where E: std::fmt::Display + std:
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::double_checked::BuilderError;
+/// use qubit_concurrent::double_checked::BuilderError;
 ///
 /// let error = BuilderError::MissingTester;
 /// println!("Builder error: {}", error);

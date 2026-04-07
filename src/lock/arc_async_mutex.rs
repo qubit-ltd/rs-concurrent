@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -38,7 +38,7 @@ use crate::lock::AsyncLock;
 /// # Usage Example
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::lock::{ArcAsyncMutex, AsyncLock};
+/// use qubit_concurrent::lock::{ArcAsyncMutex, AsyncLock};
 /// use std::sync::Arc;
 ///
 /// #[tokio::main]
@@ -81,7 +81,7 @@ impl<T> ArcAsyncMutex<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::ArcAsyncMutex;
+    /// use qubit_concurrent::lock::ArcAsyncMutex;
     ///
     /// let lock = ArcAsyncMutex::new(42);
     /// ```
@@ -115,7 +115,7 @@ where
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcAsyncMutex, AsyncLock};
+    /// use qubit_concurrent::lock::{ArcAsyncMutex, AsyncLock};
     ///
     /// #[tokio::main]
     /// async fn main() {

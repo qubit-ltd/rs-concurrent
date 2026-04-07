@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -110,7 +110,7 @@ pub trait AsyncLock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
+    /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -165,7 +165,7 @@ pub trait AsyncLock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
+    /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -207,7 +207,7 @@ pub trait AsyncLock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
+    /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
     ///
     /// let lock = ArcAsyncRwLock::new(42);
     /// if let Some(value) = lock.try_read(|data| *data) {
@@ -240,7 +240,7 @@ pub trait AsyncLock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{AsyncLock, ArcAsyncMutex};
+    /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncMutex};
     ///
     /// let lock = ArcAsyncMutex::new(42);
     /// if let Some(result) = lock.try_write(|data| {

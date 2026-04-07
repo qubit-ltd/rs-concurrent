@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -51,7 +51,7 @@ use crate::lock::Lock;
 /// ## Simple Read Operation
 ///
 /// ```rust
-/// use prism3_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+/// use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
 ///
 /// let data = ArcMutex::new(42);
 ///
@@ -69,7 +69,7 @@ use crate::lock::Lock;
 /// ## Simple Write Operation
 ///
 /// ```rust
-/// use prism3_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+/// use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
 ///
 /// let data = ArcMutex::new(0);
 ///
@@ -88,7 +88,7 @@ use crate::lock::Lock;
 /// ## Conditional Execution
 ///
 /// ```rust
-/// use prism3_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+/// use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
 ///
 /// let counter = ArcMutex::new(0);
 ///
@@ -107,7 +107,7 @@ use crate::lock::Lock;
 /// ## Error Handling
 ///
 /// ```rust
-/// use prism3_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+/// use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
 ///
 /// let data = ArcMutex::new(5);
 ///
@@ -132,8 +132,8 @@ use crate::lock::Lock;
 ///
 /// ```rust
 /// use std::sync::Arc;
-/// use prism3_atomic::AtomicBool;
-/// use prism3_concurrent::{
+/// use qubit_atomic::AtomicBool;
+/// use qubit_concurrent::{
 ///     DoubleCheckedLock,
 ///     ArcMutex,
 /// };
@@ -165,8 +165,8 @@ use crate::lock::Lock;
 ///
 /// ```rust
 /// use std::sync::Arc;
-/// use prism3_atomic::AtomicBool;
-/// use prism3_concurrent::{
+/// use qubit_atomic::AtomicBool;
+/// use qubit_concurrent::{
 ///     double_checked::DoubleCheckedLock,
 ///     lock::ArcMutex,
 /// };
@@ -221,8 +221,8 @@ use crate::lock::Lock;
 ///
 /// ```rust
 /// use std::sync::Arc;
-/// use prism3_atomic::AtomicBool;
-/// use prism3_concurrent::{
+/// use qubit_atomic::AtomicBool;
+/// use qubit_concurrent::{
 ///     double_checked::DoubleCheckedLock,
 ///     lock::ArcRwLock,
 /// };
@@ -262,7 +262,7 @@ impl DoubleCheckedLock {
     /// ## Basic read operation
     ///
     /// ```rust
-    /// use prism3_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+    /// use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
     ///
     /// let data = ArcMutex::new(42);
     ///
@@ -280,7 +280,7 @@ impl DoubleCheckedLock {
     /// ## Basic write operation
     ///
     /// ```rust
-    /// use prism3_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+    /// use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
     ///
     /// let data = ArcMutex::new(0);
     ///
@@ -299,7 +299,7 @@ impl DoubleCheckedLock {
     /// ## Conditional execution
     ///
     /// ```rust
-    /// use prism3_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+    /// use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
     ///
     /// let counter = ArcMutex::new(0);
     ///

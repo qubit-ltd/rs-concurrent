@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -49,7 +49,7 @@ use crate::lock::AsyncLock;
 /// # Usage Example
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::lock::{ArcAsyncRwLock,
+/// use qubit_concurrent::lock::{ArcAsyncRwLock,
 ///                                     AsyncReadWriteLock};
 /// use std::sync::Arc;
 ///
@@ -93,7 +93,7 @@ impl<T> ArcAsyncRwLock<T> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::ArcAsyncRwLock;
+    /// use qubit_concurrent::lock::ArcAsyncRwLock;
     ///
     /// let rw_lock = ArcAsyncRwLock::new(vec![1, 2, 3]);
     /// ```
@@ -127,7 +127,7 @@ where
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcAsyncRwLock,
+    /// use qubit_concurrent::lock::{ArcAsyncRwLock,
     ///                                     AsyncReadWriteLock};
     ///
     /// #[tokio::main]
@@ -168,7 +168,7 @@ where
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{ArcAsyncRwLock,
+    /// use qubit_concurrent::lock::{ArcAsyncRwLock,
     ///                                     AsyncReadWriteLock};
     ///
     /// #[tokio::main]

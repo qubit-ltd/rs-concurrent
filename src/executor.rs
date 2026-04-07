@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -26,7 +26,7 @@ use std::{
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_concurrent::Runnable;
+/// use qubit_concurrent::Runnable;
 ///
 /// struct MyTask {
 ///     name: String,
@@ -68,7 +68,7 @@ pub trait Runnable: Send {
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_concurrent::Callable;
+/// use qubit_concurrent::Callable;
 ///
 /// struct ComputeTask {
 ///     x: i32,
@@ -135,7 +135,7 @@ where
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_concurrent::Executor;
+/// use qubit_concurrent::Executor;
 ///
 /// struct SimpleExecutor;
 ///
@@ -169,7 +169,7 @@ pub trait Executor: Send + Sync {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use prism3_concurrent::Executor;
+    /// use qubit_concurrent::Executor;
     ///
     /// let executor = create_executor();
     /// executor.execute(Box::new(|| {
@@ -199,7 +199,7 @@ pub trait Executor: Send + Sync {
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_concurrent::AsyncExecutor;
+/// use qubit_concurrent::AsyncExecutor;
 ///
 /// struct SimpleAsyncExecutor;
 ///
@@ -239,7 +239,7 @@ pub trait AsyncExecutor: Send + Sync {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use prism3_concurrent::AsyncExecutor;
+    /// use qubit_concurrent::AsyncExecutor;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -269,7 +269,7 @@ pub trait AsyncExecutor: Send + Sync {
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_concurrent::{Executor, ExecutorService};
+/// use qubit_concurrent::{Executor, ExecutorService};
 ///
 /// #[tokio::main]
 /// async fn main() {
@@ -365,7 +365,7 @@ pub trait ExecutorService: Executor {
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_concurrent::{AsyncExecutor, AsyncExecutorService};
+/// use qubit_concurrent::{AsyncExecutor, AsyncExecutorService};
 ///
 /// #[tokio::main]
 /// async fn main() {

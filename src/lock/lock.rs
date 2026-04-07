@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -112,7 +112,7 @@ pub trait Lock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{Lock, ArcRwLock};
+    /// use qubit_concurrent::lock::{Lock, ArcRwLock};
     ///
     /// let lock = ArcRwLock::new(vec![1, 2, 3]);
     ///
@@ -165,7 +165,7 @@ pub trait Lock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{Lock, ArcRwLock};
+    /// use qubit_concurrent::lock::{Lock, ArcRwLock};
     ///
     /// let lock = ArcRwLock::new(vec![1, 2, 3]);
     ///
@@ -203,7 +203,7 @@ pub trait Lock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{Lock, ArcRwLock};
+    /// use qubit_concurrent::lock::{Lock, ArcRwLock};
     ///
     /// let lock = ArcRwLock::new(42);
     /// if let Some(value) = lock.try_read(|data| *data) {
@@ -236,7 +236,7 @@ pub trait Lock<T: ?Sized> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use prism3_rust_concurrent::lock::{Lock, ArcMutex};
+    /// use qubit_concurrent::lock::{Lock, ArcMutex};
     ///
     /// let lock = ArcMutex::new(42);
     /// if let Some(result) = lock.try_write(|data| {

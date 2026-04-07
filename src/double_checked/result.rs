@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -15,7 +15,7 @@
 //! Haixing Hu
 use std::error::Error;
 
-use prism3_function::{
+use qubit_function::{
     BoxSupplierOnce,
     SupplierOnce,
 };
@@ -35,7 +35,7 @@ use crate::double_checked::error::ExecutorError;
 /// # Examples
 ///
 /// ```rust,ignore
-/// use prism3_rust_concurrent::double_checked::{ExecutionResult, ExecutorError};
+/// use qubit_concurrent::double_checked::{ExecutionResult, ExecutorError};
 ///
 /// let success: ExecutionResult<i32, String> = ExecutionResult::Success(42);
 /// if let ExecutionResult::Success(val) = success {

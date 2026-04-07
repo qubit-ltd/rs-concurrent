@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025.
- *    3-Prism Co. Ltd.
+ *    Copyright (c) 2025 - 2026.
+ *    Haixing Hu, Qubit Co. Ltd.
  *
  *    All rights reserved.
  *
@@ -23,7 +23,7 @@
 ///
 /// ```rust,ignore
 /// use log::Level;
-/// use prism3_rust_concurrent::double_checked::LogConfig;
+/// use qubit_concurrent::double_checked::LogConfig;
 ///
 /// let config = LogConfig {
 ///     level: Level::Info,
@@ -53,7 +53,7 @@ pub struct LogConfig {
 ///
 /// ```rust,ignore
 /// use log::Level;
-/// use prism3_rust_concurrent::double_checked::{ExecutorConfig, LogConfig};
+/// use qubit_concurrent::double_checked::{ExecutorConfig, LogConfig};
 ///
 /// let log_config = LogConfig {
 ///     level: Level::Warn,
