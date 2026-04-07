@@ -8,7 +8,7 @@
 ### 1. ✅ Made Configuration Generic
 
 **Changes**:
-- Removed all hardcoded `prism3-rust-core` references
+- Removed all hardcoded `rust-concurrent` references
 - All paths are now relative to project root
 - Package name auto-detected from `Cargo.toml`
 - Works from any Rust project directory
@@ -21,9 +21,9 @@
 ### 2. ✅ Moved Configuration Location
 
 **From**: `/rust-common/.circleci/`
-**To**: `/rust-common/prism3-rust-core/.circleci/`
+**To**: `/rust-common/rust-concurrent/.circleci/`
 
-**Reason**: Configuration is specific to the `prism3-rust-core` project, not the workspace root.
+**Reason**: Configuration is specific to the `rust-concurrent` project, not the workspace root.
 
 ### 3. ✅ Internationalized All Content
 
@@ -50,7 +50,7 @@ All documents now have both English (default) and Chinese versions:
 - ❌ `/rust-common/CIRCLECI_SETUP.md` (moved to new location)
 
 **Kept**:
-- ✅ `/rust-common/prism3-rust-core/.circleci/` (new location)
+- ✅ `/rust-common/rust-concurrent/.circleci/` (new location)
 - ✅ All documentation files (English + Chinese)
 
 ### 5. ✅ Coverage Integration
@@ -64,7 +64,7 @@ All documents now have both English (default) and Chinese versions:
 ## 📁 Final File Structure
 
 ```
-prism3-rust-core/
+rust-concurrent/
 ├── .circleci/
 │   ├── config.yml                # Main configuration (generic, English)
 │   ├── README.md                 # Full docs (English) ⭐
@@ -116,7 +116,7 @@ prism3-rust-core/
 
 ## 🚀 How to Use
 
-### For This Project (prism3-rust-core)
+### For This Project (rust-concurrent)
 
 Configuration is ready to use:
 
@@ -132,10 +132,10 @@ Copy to another project:
 
 ```bash
 # Copy entire .circleci directory
-cp -r prism3-rust-core/.circleci /path/to/other-rust-project/
+cp -r rust-concurrent/.circleci /path/to/other-rust-project/
 
 # Copy ci-check script
-cp prism3-rust-core/ci-check.sh /path/to/other-rust-project/
+cp rust-concurrent/ci-check.sh /path/to/other-rust-project/
 
 # Done! No configuration changes needed
 ```
@@ -186,9 +186,9 @@ See:
 
 **Before**:
 ```yaml
-- cd prism3-rust-core
+- cd rust-concurrent
 - cargo build
-- checksum "prism3-rust-core/Cargo.lock"
+- checksum "rust-concurrent/Cargo.lock"
 ```
 
 **After**:

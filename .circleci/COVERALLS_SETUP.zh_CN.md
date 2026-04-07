@@ -1,6 +1,6 @@
 # Coveralls 集成配置指南
 
-本文档说明如何为 `prism3-rust-core` 项目配置 Coveralls.io 代码覆盖率服务。
+本文档说明如何为 `rust-concurrent` 项目配置 Coveralls.io 代码覆盖率服务。
 
 ## 📋 什么是 Coveralls？
 
@@ -23,7 +23,7 @@
 ### 步骤 2：添加仓库
 
 1. 登录后，点击 "Add Repos"
-2. 找到 `3-prism/rust-common` 仓库
+2. 找到 `qubit-ltd/rust-concurrent` 仓库
 3. 点击切换按钮启用该仓库
 4. 复制显示的 **repo token**（非常重要！）
 
@@ -31,7 +31,7 @@
 
 1. 访问 CircleCI 项目设置：
    ```
-   https://app.circleci.com/settings/project/github/3-prism/rust-common
+   https://app.circleci.com/settings/project/github/qubit-ltd/rust-concurrent
    ```
 
 2. 在左侧菜单选择 "Environment Variables"
@@ -63,7 +63,7 @@ git push
 1. 等待 CircleCI 构建完成（约 5-8 分钟）
 2. 访问 Coveralls 仪表板：
    ```
-   https://coveralls.io/github/3-prism/rust-common
+   https://coveralls.io/github/qubit-ltd/rust-concurrent
    ```
 3. 查看覆盖率报告 🎉
 
@@ -79,18 +79,18 @@ git push
 
 **Markdown 格式**：
 ```markdown
-[![Coverage Status](https://coveralls.io/repos/github/3-prism/rust-common/badge.svg?branch=main)](https://coveralls.io/github/3-prism/rust-common?branch=main)
+[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rust-concurrent/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rust-concurrent?branch=main)
 ```
 
 **在 README 中的位置**：
 
 ```markdown
-# Prism3 Core
+# Qubit Concurrent
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-blue.svg?logo=rust)](https://www.rust-lang.org)
-[![CircleCI](https://circleci.com/gh/3-prism/rust-common.svg?style=svg)](https://circleci.com/gh/3-prism/rust-common)
-[![Coverage Status](https://coveralls.io/repos/github/3-prism/rust-common/badge.svg?branch=main)](https://coveralls.io/github/3-prism/rust-common?branch=main)
+[![CircleCI](https://circleci.com/gh/qubit-ltd/rust-concurrent.svg?style=svg)](https://circleci.com/gh/qubit-ltd/rust-concurrent)
+[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rust-concurrent/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rust-concurrent?branch=main)
 ```
 
 ## 🔧 配置详解
@@ -105,7 +105,7 @@ git push
     command: |
       if [ -n "$COVERALLS_REPO_TOKEN" ]; then
         echo "📤 上传覆盖率报告到 Coveralls..."
-        cd prism3-rust-core
+        cd rust-concurrent
 
         # 使用 coveralls CLI 上传 LCOV 报告
         curl -sL https://coveralls.io/coveralls-linux.tar.gz | tar -xz
@@ -153,7 +153,7 @@ git push
 
 **项目概览**：
 ```
-https://coveralls.io/github/3-prism/rust-common
+https://coveralls.io/github/qubit-ltd/rust-concurrent
 ```
 
 显示信息：
@@ -206,7 +206,7 @@ Files with Coverage Reduction:
 在提交前本地测试覆盖率：
 
 ```bash
-cd prism3-rust-core
+cd rust-concurrent
 
 # 生成 LCOV 报告
 ./coverage.sh lcov
@@ -306,8 +306,8 @@ ls -lh target/llvm-cov/lcov.info
 然后添加徽章：
 
 ```markdown
-[![Coverage Status](https://coveralls.io/repos/github/3-prism/rust-common/badge.svg?branch=main)](https://coveralls.io/github/3-prism/rust-common?branch=main)
-[![codecov](https://codecov.io/gh/3-prism/rust-common/branch/main/graph/badge.svg)](https://codecov.io/gh/3-prism/rust-common)
+[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rust-concurrent/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rust-concurrent?branch=main)
+[![codecov](https://codecov.io/gh/qubit-ltd/rust-concurrent/branch/main/graph/badge.svg)](https://codecov.io/gh/qubit-ltd/rust-concurrent)
 ```
 
 ## 🔗 相关资源

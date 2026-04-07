@@ -9,7 +9,7 @@
 ### 1. CircleCI Configuration
 
 ```
-prism3-rust-core/
+rust-concurrent/
 ├── .circleci/
 │   ├── config.yml                # Main CircleCI configuration (generic)
 │   ├── README.md                 # Full documentation (English)
@@ -202,8 +202,8 @@ If build is abnormally slow or failing:
 Need help?
 
 - 📧 Email: starfish.hu@gmail.com
-- 🐛 Issues: https://github.com/3-prism/rust-common/issues
-- 💬 Discussions: https://github.com/3-prism/rust-common/discussions
+- 🐛 Issues: https://github.com/qubit-ltd/rust-concurrent/issues
+- 💬 Discussions: https://github.com/qubit-ltd/rust-concurrent/discussions
 
 ## 🔗 Related Links
 

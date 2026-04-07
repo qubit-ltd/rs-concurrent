@@ -568,10 +568,10 @@ executors:
 For questions or suggestions:
 
 - 📧 Email: starfish.hu@gmail.com
-- 🐛 Issues: [GitHub Issues](https://github.com/3-prism/rust-common/issues)
-- 💡 Discussions: [GitHub Discussions](https://github.com/3-prism/rust-common/discussions)
+- 🐛 Issues: [GitHub Issues](https://github.com/qubit-ltd/rust-concurrent/issues)
+- 💡 Discussions: [GitHub Discussions](https://github.com/qubit-ltd/rust-concurrent/discussions)
 
 ---
 
-**3-Prism Co. Ltd.** | Apache-2.0 License
+**Haixing Hu, Qubit Co. Ltd.** | Apache-2.0 License
 

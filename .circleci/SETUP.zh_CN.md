@@ -9,7 +9,7 @@
 ### 1. CircleCI Configuration
 
 ```
-prism3-rust-core/
+rust-concurrent/
 ├── .circleci/
 │   ├── config.yml                # Main CircleCI configuration (generic)
 │   ├── README.md                 # Full documentation (English)
@@ -59,7 +59,7 @@ prism3-rust-core/
 
 访问 [CircleCI](https://circleci.com/) 并：
 1. 使用 GitHub 账号登录
-2. 选择 `3-prism/rust-common` 项目
+2. 选择 `qubit-ltd/rust-concurrent` 项目
 3. 点击 "Set Up Project"
 4. CircleCI 会自动检测配置并开始构建
 
@@ -68,7 +68,7 @@ prism3-rust-core/
 在提交前测试配置：
 
 ```bash
-cd prism3-rust-core
+cd rust-concurrent
 
 # 运行完整检查
 ./ci-check.sh
@@ -79,10 +79,10 @@ cd prism3-rust-core
 
 ### 3. 添加状态徽章（推荐）
 
-在 `prism3-rust-core/README.md` 中添加：
+在 `rust-concurrent/README.md` 中添加：
 
 ```markdown
-[![CircleCI](https://circleci.com/gh/3-prism/rust-common.svg?style=svg)](https://circleci.com/gh/3-prism/rust-common)
+[![CircleCI](https://circleci.com/gh/qubit-ltd/rust-concurrent.svg?style=svg)](https://circleci.com/gh/qubit-ltd/rust-concurrent)
 ```
 
 ### 4. 配置通知（可选）
@@ -143,7 +143,7 @@ cargo test
 
 **在线查看**：
 ```
-https://app.circleci.com/pipelines/github/3-prism/rust-common
+https://app.circleci.com/pipelines/github/qubit-ltd/rust-concurrent
 ```
 
 **Pull Request**：
@@ -203,8 +203,8 @@ git commit -m "docs: 更新文档 [ci skip]"
 遇到问题？
 
 - 📧 邮件：starfish.hu@gmail.com
-- 🐛 Issue：https://github.com/3-prism/rust-common/issues
-- 💬 讨论：https://github.com/3-prism/rust-common/discussions
+- 🐛 Issue：https://github.com/qubit-ltd/rust-concurrent/issues
+- 💬 讨论：https://github.com/qubit-ltd/rust-concurrent/discussions
 
 ## 🔗 相关链接
 
@@ -217,7 +217,7 @@ git commit -m "docs: 更新文档 [ci skip]"
 ---
 
 **配置完成日期**：2025-10-13
-**项目**：prism3-rust-core
+**项目**：rust-concurrent
 **配置版本**：v1.0
 
 ✅ 配置已完成，可以开始使用 CircleCI 进行持续集成！

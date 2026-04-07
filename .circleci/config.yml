@@ -6,6 +6,15 @@ version: 2.1
 # Reason: rustfmt requires nightly for imports_layout = "Vertical" feature
 # ==============================================================================
 
+commands:
+  checkout_https:
+    steps:
+      - run:
+          name: Checkout source via HTTPS
+          command: |
+            git clone "https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git" .
+            git checkout "$CIRCLE_SHA1"
+
 # ==============================================================================
 # Job Definitions
 # Each job represents a collection of steps to be executed in a specific environment.
@@ -21,7 +30,7 @@ jobs:
     docker:
       - image: rustlang/rust:nightly
     steps:
-      - checkout
+      - checkout_https
       # Restore cached dependencies to speed up the process
       - restore_cache:
           keys:
@@ -29,8 +38,14 @@ jobs:
             - v3-cargo-cache-nightly-{{ arch }}-{{ checksum "Cargo.toml" }}-
             - v3-cargo-cache-nightly-{{ arch }}-
       - run:
+          name: Install rustfmt component
+          command: rustup component add rustfmt
+      - run:
           name: Check code format
           command: cargo fmt -- --check
+      - run:
+          name: Install clippy component
+          command: rustup component add clippy
       - run:
           name: Run clippy (with dependency caching)
           command: |
@@ -57,7 +72,7 @@ jobs:
       - image: rustlang/rust:nightly
     resource_class: medium+
     steps:
-      - checkout
+      - checkout_https
       # Restore enhanced cargo cache
       - restore_cache:
           keys:
@@ -169,7 +184,7 @@ jobs:
     docker:
       - image: rustlang/rust:nightly
     steps:
-      - checkout
+      - checkout_https
       # Restore enhanced cargo cache
       - restore_cache:
           keys:
@@ -195,7 +210,7 @@ jobs:
     docker:
       - image: rustlang/rust:nightly
     steps:
-      - checkout
+      - checkout_https
       # Restore enhanced cargo cache
       - restore_cache:
           keys:
