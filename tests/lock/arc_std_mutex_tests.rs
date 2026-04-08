@@ -24,6 +24,7 @@ use qubit_concurrent::{
 };
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod arc_std_mutex_tests {
     use super::*;
 
@@ -433,7 +434,7 @@ mod arc_std_mutex_tests {
             *res = Err("test error");
         });
 
-        let result = mutex.read(|res| res.clone());
+        let result = mutex.read(|res| *res);
         assert_eq!(result, Err("test error"));
     }
 

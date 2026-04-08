@@ -81,8 +81,8 @@ mod tests {
         fn test_executor_config_default() {
             let config = ExecutorConfig::default();
 
-            assert_eq!(config.enable_metrics, false);
-            assert_eq!(config.disable_backtrace, false);
+            assert!(!config.enable_metrics);
+            assert!(!config.disable_backtrace);
         }
 
         #[test]
@@ -92,8 +92,8 @@ mod tests {
                 disable_backtrace: true,
             };
 
-            assert_eq!(config.enable_metrics, true);
-            assert_eq!(config.disable_backtrace, true);
+            assert!(config.enable_metrics);
+            assert!(config.disable_backtrace);
         }
 
         #[test]

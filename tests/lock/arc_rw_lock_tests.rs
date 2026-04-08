@@ -21,6 +21,7 @@ use qubit_concurrent::{
 };
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod arc_rw_lock_tests {
     use super::*;
 

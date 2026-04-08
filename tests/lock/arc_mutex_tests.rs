@@ -24,6 +24,7 @@ use qubit_concurrent::{
 };
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod arc_mutex_tests {
     use super::*;
 
@@ -345,14 +346,14 @@ mod arc_mutex_tests {
     fn test_arc_mutex_with_result() {
         let mutex = ArcMutex::new(Ok::<i32, &str>(42));
 
-        let result = mutex.read(|r| r.clone());
+        let result = mutex.read(|r| *r);
         assert_eq!(result, Ok(42));
 
         mutex.write(|r| {
             *r = Err("error");
         });
 
-        let result = mutex.read(|r| r.clone());
+        let result = mutex.read(|r| *r);
         assert_eq!(result, Err("error"));
     }
 

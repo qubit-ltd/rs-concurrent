@@ -22,6 +22,7 @@ use parking_lot::Mutex as ParkingLotMutex;
 use qubit_concurrent::lock::Lock;
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod parking_lot_mutex_tests {
     use super::*;
 

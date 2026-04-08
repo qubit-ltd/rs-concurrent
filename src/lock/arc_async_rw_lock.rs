@@ -15,10 +15,7 @@
 //! # Author
 //!
 //! Haixing Hu
-use std::{
-    future::Future,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use tokio::sync::RwLock as AsyncRwLock;
 
@@ -138,14 +135,13 @@ where
     ///     println!("Vector length: {}", length);
     /// }
     /// ```
-    fn read<R, F>(&self, f: F) -> impl Future<Output = R> + Send
+    async fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R + Send,
+        R: Send,
     {
-        async move {
-            let guard = self.inner.read().await;
-            f(&*guard)
-        }
+        let guard = self.inner.read().await;
+        f(&*guard)
     }
 
     /// Acquires the write lock and executes an operation
@@ -181,14 +177,13 @@ where
     ///     }).await;
     /// }
     /// ```
-    fn write<R, F>(&self, f: F) -> impl Future<Output = R> + Send
+    async fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R + Send,
+        R: Send,
     {
-        async move {
-            let mut guard = self.inner.write().await;
-            f(&mut *guard)
-        }
+        let mut guard = self.inner.write().await;
+        f(&mut *guard)
     }
 
     fn try_read<R, F>(&self, f: F) -> Option<R>

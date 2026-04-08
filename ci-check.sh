@@ -59,13 +59,13 @@ fi
 echo ""
 
 # Check 2: Clippy linting
-print_step "2/6 Running Clippy checks (cargo clippy)..."
-if cargo clippy --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy-output.txt | grep -q "warning\|error"; then
+print_step "2/6 Running Clippy checks (cargo +nightly clippy)..."
+if cargo +nightly clippy --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy-output.txt | grep -q "warning\|error"; then
     print_error "Clippy found issues"
     cat /tmp/clippy-output.txt
     echo ""
     echo "Please try to auto-fix with:"
-    echo "  cargo clippy --fix"
+    echo "  cargo +nightly clippy --fix"
     exit 1
 else
     print_success "Clippy checks passed"

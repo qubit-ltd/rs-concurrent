@@ -196,11 +196,7 @@ impl<T> Lock<T> for ArcMutex<T> {
     where
         F: FnOnce(&T) -> R,
     {
-        if let Some(guard) = self.inner.try_lock() {
-            Some(f(&*guard))
-        } else {
-            None
-        }
+        self.inner.try_lock().map(|guard| f(&*guard))
     }
 
     /// Attempts to acquire a write lock without blocking
@@ -239,11 +235,7 @@ impl<T> Lock<T> for ArcMutex<T> {
     where
         F: FnOnce(&mut T) -> R,
     {
-        if let Some(mut guard) = self.inner.try_lock() {
-            Some(f(&mut *guard))
-        } else {
-            None
-        }
+        self.inner.try_lock().map(|mut guard| f(&mut *guard))
     }
 }
 
