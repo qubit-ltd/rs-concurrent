@@ -81,6 +81,7 @@ impl Default for ExecutorConfig {
     ///
     /// Returns a default configuration with metrics disabled and
     /// backtrace enabled.
+    #[inline]
     fn default() -> Self {
         Self {
             enable_metrics: false,

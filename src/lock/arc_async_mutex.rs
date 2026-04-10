@@ -85,6 +85,7 @@ impl<T> ArcAsyncMutex<T> {
     ///
     /// let lock = ArcAsyncMutex::new(42);
     /// ```
+    #[inline]
     pub fn new(data: T) -> Self {
         Self {
             inner: Arc::new(AsyncMutex::new(data)),
@@ -129,6 +130,7 @@ where
     ///     println!("Counter value: {}", result);
     /// }
     /// ```
+    #[inline]
     async fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R + Send,
@@ -138,6 +140,7 @@ where
         f(&*guard)
     }
 
+    #[inline]
     async fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R + Send,
@@ -147,6 +150,7 @@ where
         f(&mut *guard)
     }
 
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -158,6 +162,7 @@ where
         }
     }
 
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
@@ -177,6 +182,7 @@ impl<T> Clone for ArcAsyncMutex<T> {
     /// underlying lock with the original instance. This allows
     /// multiple tasks to hold references to the same lock
     /// simultaneously.
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),

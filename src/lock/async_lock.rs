@@ -272,6 +272,7 @@ pub trait AsyncLock<T: ?Sized> {
 ///
 /// Haixing Hu
 impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
+    #[inline]
     async fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R + Send,
@@ -281,6 +282,7 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
         f(&*guard)
     }
 
+    #[inline]
     async fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R + Send,
@@ -290,6 +292,7 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
         f(&mut *guard)
     }
 
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -301,6 +304,7 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
         }
     }
 
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
@@ -329,6 +333,7 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
 ///
 /// Haixing Hu
 impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
+    #[inline]
     async fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R + Send,
@@ -338,6 +343,7 @@ impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
         f(&*guard)
     }
 
+    #[inline]
     async fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R + Send,
@@ -347,6 +353,7 @@ impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
         f(&mut *guard)
     }
 
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -358,6 +365,7 @@ impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
         }
     }
 
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,

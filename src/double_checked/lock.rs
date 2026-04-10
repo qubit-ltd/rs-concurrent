@@ -329,6 +329,7 @@ impl DoubleCheckedLock {
     ///
     /// Returns an `ExecutionBuilder` instance in Initial state to configure
     /// and execute the operation
+    #[inline]
     pub fn on<'a, L, T>(lock: &'a L) -> ExecutionBuilder<'a, L, T, Initial>
     where
         L: Lock<T>,

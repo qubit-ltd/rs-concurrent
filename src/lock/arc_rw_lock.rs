@@ -90,6 +90,7 @@ impl<T> ArcRwLock<T> {
     ///
     /// let rw_lock = ArcRwLock::new(vec![1, 2, 3]);
     /// ```
+    #[inline]
     pub fn new(data: T) -> Self {
         Self {
             inner: Arc::new(RwLock::new(data)),
@@ -124,6 +125,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     /// let length = data.read(|v| v.len());
     /// println!("Vector length: {}", length);
     /// ```
+    #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R,
@@ -160,6 +162,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     ///     println!("Added element, new length: {}", v.len());
     /// });
     /// ```
+    #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
@@ -197,6 +200,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     ///     println!("Lock is busy with write operation");
     /// }
     /// ```
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -240,6 +244,7 @@ impl<T> Lock<T> for ArcRwLock<T> {
     ///     println!("Lock is busy");
     /// }
     /// ```
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
@@ -259,6 +264,7 @@ impl<T> Clone for ArcRwLock<T> {
     /// underlying lock with the original instance. This allows
     /// multiple threads to hold references to the same lock
     /// simultaneously.
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),

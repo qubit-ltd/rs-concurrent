@@ -83,6 +83,7 @@ impl<T> ArcStdMutex<T> {
     ///
     /// let lock = ArcStdMutex::new(42);
     /// ```
+    #[inline]
     pub fn new(data: T) -> Self {
         Self {
             inner: Arc::new(Mutex::new(data)),
@@ -115,6 +116,7 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     /// let value = counter.read(|c| *c);
     /// println!("Current value: {}", value);
     /// ```
+    #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R,
@@ -151,6 +153,7 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///
     /// println!("Counter value: {}", result);
     /// ```
+    #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
@@ -188,6 +191,7 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///     println!("Lock is busy");
     /// }
     /// ```
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -231,6 +235,7 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///     println!("Lock is busy");
     /// }
     /// ```
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
@@ -250,6 +255,7 @@ impl<T> Clone for ArcStdMutex<T> {
     /// underlying lock with the original instance. This allows
     /// multiple threads to hold references to the same lock
     /// simultaneously.
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),

@@ -71,21 +71,25 @@ where
     E: std::fmt::Display,
 {
     /// Checks if the execution was successful
+    #[inline]
     pub fn is_success(&self) -> bool {
         matches!(self, ExecutionResult::Success(_))
     }
 
     /// Checks if the condition was not met
+    #[inline]
     pub fn is_unmet(&self) -> bool {
         matches!(self, ExecutionResult::ConditionNotMet)
     }
 
     /// Checks if the execution failed
+    #[inline]
     pub fn is_failed(&self) -> bool {
         matches!(self, ExecutionResult::Failed(_))
     }
 
     /// Unwraps the success value, panicking if not successful
+    #[inline]
     pub fn unwrap(self) -> T {
         match self {
             ExecutionResult::Success(v) => v,
@@ -105,6 +109,7 @@ where
     /// * `Ok(Some(T))` - If execution was successful
     /// * `Ok(None)` - If condition was not met
     /// * `Err(ExecutorError<E>)` - If execution failed
+    #[inline]
     pub fn into_result(self) -> Result<Option<T>, ExecutorError<E>> {
         match self {
             ExecutionResult::Success(v) => Ok(Some(v)),
@@ -145,6 +150,7 @@ where
     /// # Arguments
     ///
     /// * `result` - The execution result
+    #[inline]
     pub(super) fn new(result: ExecutionResult<T, E>) -> Self {
         Self {
             result,
@@ -202,11 +208,13 @@ where
     }
 
     /// Checks the execution result (does not consume the context)
+    #[inline]
     pub fn peek_result(&self) -> &ExecutionResult<T, E> {
         &self.result
     }
 
     /// Checks if execution was successful
+    #[inline]
     pub fn is_success(&self) -> bool {
         self.result.is_success()
     }
@@ -220,6 +228,7 @@ where
     /// Completes execution (for operations without return values)
     ///
     /// Returns whether the execution was successful
+    #[inline]
     pub fn finish(self) -> bool {
         let result = self.get_result();
         result.is_success()

@@ -267,6 +267,7 @@ pub trait Lock<T: ?Sized> {
 ///
 /// Haixing Hu
 impl<T: ?Sized> Lock<T> for Mutex<T> {
+    #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R,
@@ -275,6 +276,7 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
         f(&*guard)
     }
 
+    #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
@@ -283,6 +285,7 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
         f(&mut *guard)
     }
 
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -294,6 +297,7 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
         }
     }
 
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
@@ -321,6 +325,7 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
 ///
 /// Haixing Hu
 impl<T: ?Sized> Lock<T> for RwLock<T> {
+    #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R,
@@ -329,6 +334,7 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
         f(&*guard)
     }
 
+    #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
@@ -337,6 +343,7 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
         f(&mut *guard)
     }
 
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -348,6 +355,7 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
         }
     }
 
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
@@ -383,6 +391,7 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
 ///
 /// Haixing Hu
 impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
+    #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R,
@@ -391,6 +400,7 @@ impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
         f(&*guard)
     }
 
+    #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
@@ -399,6 +409,7 @@ impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
         f(&mut *guard)
     }
 
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -406,6 +417,7 @@ impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
         self.try_lock().map(|guard| f(&*guard))
     }
 
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,

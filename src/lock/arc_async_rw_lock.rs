@@ -94,6 +94,7 @@ impl<T> ArcAsyncRwLock<T> {
     ///
     /// let rw_lock = ArcAsyncRwLock::new(vec![1, 2, 3]);
     /// ```
+    #[inline]
     pub fn new(data: T) -> Self {
         Self {
             inner: Arc::new(AsyncRwLock::new(data)),
@@ -135,6 +136,7 @@ where
     ///     println!("Vector length: {}", length);
     /// }
     /// ```
+    #[inline]
     async fn read<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&T) -> R + Send,
@@ -177,6 +179,7 @@ where
     ///     }).await;
     /// }
     /// ```
+    #[inline]
     async fn write<R, F>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R + Send,
@@ -186,6 +189,7 @@ where
         f(&mut *guard)
     }
 
+    #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&T) -> R,
@@ -197,6 +201,7 @@ where
         }
     }
 
+    #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut T) -> R,
@@ -216,6 +221,7 @@ impl<T> Clone for ArcAsyncRwLock<T> {
     /// underlying lock with the original instance. This allows
     /// multiple tasks to hold references to the same lock
     /// simultaneously.
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),

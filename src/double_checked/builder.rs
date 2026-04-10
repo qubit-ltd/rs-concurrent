@@ -95,6 +95,7 @@ where
     /// # Arguments
     ///
     /// * `lock` - Reference to the lock object
+    #[inline]
     pub(super) fn new(lock: &'a L) -> Self {
         Self {
             lock,
@@ -115,6 +116,7 @@ where
     ///
     /// * `level` - Log level
     /// * `message` - Log message
+    #[inline]
     pub fn logger(
         mut self,
         level: log::Level,
@@ -153,6 +155,7 @@ where
     /// # Arguments
     ///
     /// * `tester` - The test condition
+    #[inline]
     pub fn when<Tst>(mut self, tester: Tst) -> ExecutionBuilder<'a, L, T, Conditioned>
     where
         Tst: Tester + 'static,
@@ -190,6 +193,7 @@ where
     ///
     /// * `level` - Log level
     /// * `message` - Log message
+    #[inline]
     pub fn logger(mut self, level: log::Level, message: &str) -> Self {
         self.logger = Some(LogConfig {
             level,
@@ -218,6 +222,7 @@ where
     /// # Arguments
     ///
     /// * `tester` - The test condition
+    #[inline]
     pub fn when<Tst>(mut self, tester: Tst) -> ExecutionBuilder<'a, L, T, Conditioned>
     where
         Tst: Tester + 'static,
@@ -259,6 +264,7 @@ where
     ///
     /// * `prepare_action` - Any type that implements
     ///   `SupplierOnce<Result<(), E>>`
+    #[inline]
     pub fn prepare<S, E>(mut self, prepare_action: S) -> Self
     where
         S: SupplierOnce<Result<(), E>> + 'static,
@@ -290,6 +296,7 @@ where
     /// # Arguments
     ///
     /// * `task` - Any type that implements `FunctionOnce<T, Result<R, E>>`
+    #[inline]
     pub fn call<F, R, E>(self, task: F) -> ExecutionContext<R, E>
     where
         F: FunctionOnce<T, Result<R, E>> + 'static,
@@ -311,6 +318,7 @@ where
     ///
     /// * `task` - Any type that implements
     ///   `MutatingFunctionOnce<T, Result<R, E>>`
+    #[inline]
     pub fn call_mut<F, R, E>(self, task: F) -> ExecutionContext<R, E>
     where
         F: MutatingFunctionOnce<T, Result<R, E>> + 'static,
@@ -327,6 +335,7 @@ where
     /// # Arguments
     ///
     /// * `task` - Any type that implements `FunctionOnce<T, Result<(), E>>`
+    #[inline]
     pub fn execute<F, E>(self, task: F) -> ExecutionContext<(), E>
     where
         F: FunctionOnce<T, Result<(), E>> + 'static,
@@ -341,6 +350,7 @@ where
     ///
     /// * `task` - Any type that implements
     ///   `MutatingFunctionOnce<T, Result<(), E>>`
+    #[inline]
     pub fn execute_mut<F, E>(self, task: F) -> ExecutionContext<(), E>
     where
         F: MutatingFunctionOnce<T, Result<(), E>> + 'static,
