@@ -1,13 +1,13 @@
 [package]
 name = "qubit-concurrent"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 rust-version = "1.70"
 authors = ["Haixing Hu <starfish.hu@gmail.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/qubit-ltd/rust-concurrent"
+repository = "https://github.com/qubit-ltd/rs-concurrent"
 description = "Concurrent utilities library providing thread pools, task scheduling, synchronization primitives and other concurrent programming tools"
-homepage = "https://github.com/qubit-ltd/rust-concurrent"
+homepage = "https://github.com/qubit-ltd/rs-concurrent"
 documentation = "https://docs.rs/qubit-concurrent"
 readme = "README.md"
 keywords = ["concurrent", "async", "lock", "mutex", "rwlock"]
@@ -30,11 +30,11 @@ doctest = false
 # Async runtime
 tokio = { version = "1.0", features = ["sync"] }
 # Core utilities
-qubit-common = "0.3.0"
+qubit-common = "0.5.3"
 # Functional programming utilities
-qubit-function = "0.7.0"
+qubit-function = "0.7.3"
 # Atomic operations
-qubit-atomic = "0.7.0"
+qubit-atomic = "0.7.2"
 # Error handling
 thiserror = "2.0.17"
 # Logging
