@@ -28,9 +28,14 @@ pub use executor::{
     AsyncExecutor,
     AsyncExecutorService,
     Callable,
+    DirectExecutor,
     Executor,
     ExecutorService,
     Runnable,
+    ThreadPerTaskExecutor,
+    ThreadPerTaskExecutorService,
+    TokioExecutor,
+    TokioExecutorService,
 };
 pub use lock::{
     ArcAsyncMutex,

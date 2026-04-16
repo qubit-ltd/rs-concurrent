@@ -28,7 +28,7 @@ doctest = false
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.52", features = ["sync"] }
+tokio = { version = "1.52", features = ["sync", "rt"] }
 # Error handling
 thiserror = "2.0"
 # Logging

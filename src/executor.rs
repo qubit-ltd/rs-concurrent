@@ -17,7 +17,14 @@
 use std::{
     future::Future,
     pin::Pin,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
+    thread,
 };
+
+use tokio::{sync::Notify, task::JoinHandle};
 
 /// Runnable task trait
 ///
@@ -435,4 +442,281 @@ pub trait AsyncExecutorService: AsyncExecutor {
     ///
     /// A future that completes when all async tasks have finished
     fn await_termination(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+/// Executes synchronous tasks immediately on the caller thread.
+///
+/// This executor is useful for deterministic tests and simple scenarios where
+/// task submission and execution should happen in the same call stack.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DirectExecutor;
+
+impl Executor for DirectExecutor {
+    /// Executes the task inline on the current thread.
+    #[inline]
+    fn execute(&self, task: Box<dyn FnOnce() + Send + 'static>) {
+        task();
+    }
+}
+
+/// Executes each submitted synchronous task on a dedicated thread.
+///
+/// This executor does not track task lifecycle and does not support shutdown.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ThreadPerTaskExecutor;
+
+impl Executor for ThreadPerTaskExecutor {
+    /// Spawns one OS thread per task and detaches it immediately.
+    #[inline]
+    fn execute(&self, task: Box<dyn FnOnce() + Send + 'static>) {
+        let _ = thread::spawn(move || {
+            task();
+        });
+    }
+}
+
+/// Shared state for `ThreadPerTaskExecutorService`.
+#[derive(Default)]
+struct ThreadPerTaskExecutorServiceState {
+    shutdown: AtomicBool,
+    active_tasks: AtomicUsize,
+    handles: Mutex<Vec<thread::JoinHandle<()>>>,
+}
+
+impl ThreadPerTaskExecutorServiceState {
+    /// Acquires the thread handle collection while tolerating poisoned locks.
+    fn lock_handles(&self) -> MutexGuard<'_, Vec<thread::JoinHandle<()>>> {
+        self.handles
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Joins all currently tracked worker threads.
+    ///
+    /// This method blocks until every tracked thread has completed.
+    fn join_all_handles(&self) {
+        let mut handles = self.lock_handles();
+        let running = std::mem::take(&mut *handles);
+        drop(handles);
+        for handle in running {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// Thread-per-task executor with shutdown and termination coordination.
+///
+/// This type offers a simple `ExecutorService` implementation for synchronous
+/// tasks. `shutdown_now()` cannot forcefully stop running threads; it only
+/// stops accepting new tasks.
+#[derive(Default, Clone)]
+pub struct ThreadPerTaskExecutorService {
+    state: Arc<ThreadPerTaskExecutorServiceState>,
+}
+
+impl ThreadPerTaskExecutorService {
+    /// Creates a new service instance.
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Executor for ThreadPerTaskExecutorService {
+    /// Spawns a dedicated worker thread for the task when the service is active.
+    fn execute(&self, task: Box<dyn FnOnce() + Send + 'static>) {
+        if self.state.shutdown.load(Ordering::Acquire) {
+            return;
+        }
+        self.state.active_tasks.fetch_add(1, Ordering::AcqRel);
+        let state = Arc::clone(&self.state);
+        let handle = thread::spawn(move || {
+            task();
+            state.active_tasks.fetch_sub(1, Ordering::AcqRel);
+        });
+        self.state.lock_handles().push(handle);
+    }
+}
+
+impl ExecutorService for ThreadPerTaskExecutorService {
+    /// Stops accepting new synchronous tasks.
+    fn shutdown(&self) {
+        self.state.shutdown.store(true, Ordering::Release);
+    }
+
+    /// Stops accepting new synchronous tasks and returns no queued tasks.
+    ///
+    /// The service executes submitted work immediately, so there is no pending
+    /// task queue to return.
+    fn shutdown_now(&self) -> Vec<Box<dyn Runnable>> {
+        self.state.shutdown.store(true, Ordering::Release);
+        Vec::new()
+    }
+
+    /// Returns whether shutdown has been requested.
+    fn is_shutdown(&self) -> bool {
+        self.state.shutdown.load(Ordering::Acquire)
+    }
+
+    /// Returns whether shutdown was requested and all tasks are finished.
+    fn is_terminated(&self) -> bool {
+        self.is_shutdown() && self.state.active_tasks.load(Ordering::Acquire) == 0
+    }
+
+    /// Waits for all tracked worker threads to complete.
+    ///
+    /// This future blocks the current thread while joining worker threads.
+    fn await_termination(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            self.state.join_all_handles();
+        })
+    }
+}
+
+/// Executes asynchronous tasks by delegating to `tokio::spawn`.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TokioExecutor;
+
+impl AsyncExecutor for TokioExecutor {
+    /// Spawns the future onto the current Tokio runtime.
+    #[inline]
+    fn spawn<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        std::mem::drop(tokio::spawn(future));
+    }
+}
+
+/// Shared state for `TokioExecutorService`.
+#[derive(Default)]
+struct TokioExecutorServiceState {
+    shutdown: AtomicBool,
+    active_tasks: AtomicUsize,
+    handles: Mutex<Vec<JoinHandle<()>>>,
+    terminated_notify: Notify,
+}
+
+impl TokioExecutorServiceState {
+    /// Acquires the task handle collection while tolerating poisoned locks.
+    fn lock_handles(&self) -> MutexGuard<'_, Vec<JoinHandle<()>>> {
+        self.handles
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Drops handles for tasks that have already completed.
+    fn cleanup_finished_handles(&self) {
+        self.lock_handles().retain(|handle| !handle.is_finished());
+    }
+
+    /// Notifies awaiters if shutdown has been requested and no tasks remain.
+    fn notify_if_terminated(&self) {
+        if self.shutdown.load(Ordering::Acquire) && self.active_tasks.load(Ordering::Acquire) == 0 {
+            self.terminated_notify.notify_waiters();
+        }
+    }
+}
+
+/// Task lifecycle guard for `TokioExecutorService`.
+///
+/// Decrements active task count and signals termination on drop.
+struct TokioTaskGuard {
+    state: Arc<TokioExecutorServiceState>,
+}
+
+impl TokioTaskGuard {
+    /// Creates a new lifecycle guard.
+    #[inline]
+    fn new(state: Arc<TokioExecutorServiceState>) -> Self {
+        Self { state }
+    }
+}
+
+impl Drop for TokioTaskGuard {
+    /// Updates service counters when a task completes or is cancelled.
+    fn drop(&mut self) {
+        if self.state.active_tasks.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.state.notify_if_terminated();
+        }
+    }
+}
+
+/// Tokio-backed async executor with lifecycle control.
+///
+/// After shutdown, new tasks are ignored. `shutdown_now()` aborts tracked tasks.
+#[derive(Default, Clone)]
+pub struct TokioExecutorService {
+    state: Arc<TokioExecutorServiceState>,
+}
+
+impl TokioExecutorService {
+    /// Creates a new service instance.
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl AsyncExecutor for TokioExecutorService {
+    /// Spawns an async task while the service is accepting work.
+    fn spawn<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        if self.state.shutdown.load(Ordering::Acquire) {
+            return;
+        }
+        self.state.active_tasks.fetch_add(1, Ordering::AcqRel);
+        let state = Arc::clone(&self.state);
+        let handle = tokio::spawn(async move {
+            let _guard = TokioTaskGuard::new(state);
+            future.await;
+        });
+        self.state.cleanup_finished_handles();
+        self.state.lock_handles().push(handle);
+    }
+}
+
+impl AsyncExecutorService for TokioExecutorService {
+    /// Stops accepting new async tasks.
+    fn shutdown(&self) {
+        self.state.shutdown.store(true, Ordering::Release);
+        self.state.notify_if_terminated();
+    }
+
+    /// Stops accepting new tasks and aborts tracked Tokio tasks.
+    fn shutdown_now(&self) {
+        self.state.shutdown.store(true, Ordering::Release);
+        let mut handles = self.state.lock_handles();
+        let draining = std::mem::take(&mut *handles);
+        drop(handles);
+        for handle in draining {
+            handle.abort();
+        }
+        self.state.notify_if_terminated();
+    }
+
+    /// Returns whether shutdown has been requested.
+    fn is_shutdown(&self) -> bool {
+        self.state.shutdown.load(Ordering::Acquire)
+    }
+
+    /// Returns whether shutdown was requested and no active tasks remain.
+    fn is_terminated(&self) -> bool {
+        self.is_shutdown() && self.state.active_tasks.load(Ordering::Acquire) == 0
+    }
+
+    /// Waits until shutdown is requested and all active tasks complete.
+    fn await_termination(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            loop {
+                self.state.cleanup_finished_handles();
+                if self.is_terminated() {
+                    return;
+                }
+                self.state.terminated_notify.notified().await;
+            }
+        })
+    }
 }
