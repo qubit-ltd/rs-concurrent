@@ -192,7 +192,7 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|_value: &i32| {
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<i32, _>(io::Error::other("Task failed"))
                 });
 
             assert!(!context.is_success());
@@ -208,7 +208,7 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|_value: &i32| {
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<i32, _>(io::Error::other("Task failed"))
                 })
                 .rollback(|| Ok::<(), io::Error>(()));
 
@@ -223,9 +223,9 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|_value: &i32| {
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<i32, _>(io::Error::other("Task failed"))
                 })
-                .rollback(|| Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Rollback failed")));
+                .rollback(|| Err::<(), _>(io::Error::other("Rollback failed")));
 
             let final_result = context.get_result();
             // Should be RollbackFailed
@@ -242,7 +242,7 @@ mod tests {
                 .when(|| true)
                 .call(|value: &i32| Ok::<i32, io::Error>(*value))
                 .rollback(|| {
-                    Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Should not execute"))
+                    Err::<(), _>(io::Error::other("Should not execute"))
                 });
 
             let final_result = context.get_result();
@@ -257,7 +257,7 @@ mod tests {
                 .when(|| false)
                 .call(|value: &i32| Ok::<i32, io::Error>(*value))
                 .rollback(|| {
-                    Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Should not execute"))
+                    Err::<(), _>(io::Error::other("Should not execute"))
                 });
 
             let final_result = context.get_result();
@@ -281,7 +281,7 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .execute(|_value: &()| {
-                    Err::<(), _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<(), _>(io::Error::other("Task failed"))
                 });
 
             assert!(!context.finish());

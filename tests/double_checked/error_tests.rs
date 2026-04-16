@@ -62,7 +62,7 @@ mod tests {
 
         #[test]
         fn test_executor_error_with_io_error() {
-            let io_error = io::Error::new(io::ErrorKind::Other, "IO error");
+            let io_error = io::Error::other("IO error");
             let error = ExecutorError::<io::Error>::TaskFailed(io_error);
             let display = format!("{}", error);
             assert!(display.contains("Task execution failed"));

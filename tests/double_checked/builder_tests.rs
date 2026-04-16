@@ -210,7 +210,7 @@ mod tests {
                     let condition = condition.clone();
                     move || condition.load(Ordering::Acquire)
                 })
-                .prepare(|| Err(io::Error::new(io::ErrorKind::Other, "Prepare failed")))
+                .prepare(|| Err(io::Error::other("Prepare failed")))
                 .call(|value: &i32| Ok::<i32, io::Error>(*value))
                 .get_result();
 
@@ -231,7 +231,7 @@ mod tests {
                 })
                 .call_mut(|value: &mut i32| {
                     *value = 20;
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<i32, _>(io::Error::other("Task failed"))
                 })
                 .get_result();
 
@@ -254,7 +254,7 @@ mod tests {
                 })
                 .call_mut(|value: &mut i32| {
                     *value = 30;
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<i32, _>(io::Error::other("Task failed"))
                 });
 
             let rollback_called_clone = rollback_called.clone();

@@ -57,7 +57,7 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|_value: &i32| {
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Test error"))
+                    Err::<i32, _>(io::Error::other("Test error"))
                 });
 
             assert!(!context.is_success());
@@ -97,7 +97,7 @@ mod tests {
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|_value: &i32| {
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error"))
+                    Err::<i32, _>(io::Error::other("Original error"))
                 });
 
             let final_result = context.get_result();
@@ -119,7 +119,7 @@ mod tests {
             let mut context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|_value: &i32| {
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error"))
+                    Err::<i32, _>(io::Error::other("Original error"))
                 });
 
             let rollback_called_clone = rollback_called.clone();
@@ -150,11 +150,11 @@ mod tests {
             let mut context = DoubleCheckedLock::on(&data)
                 .when(|| true)
                 .call(|_value: &i32| {
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Original error"))
+                    Err::<i32, _>(io::Error::other("Original error"))
                 });
 
             context =
-                context.rollback(|| Err(io::Error::new(io::ErrorKind::Other, "Rollback failed")));
+                context.rollback(|| Err(io::Error::other("Rollback failed")));
 
             let final_result = context.get_result();
 
@@ -245,7 +245,7 @@ mod tests {
 
             let failed_context = DoubleCheckedLock::on(&data3)
                 .when(|| true)
-                .call(|_value: &i32| Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "error")));
+                .call(|_value: &i32| Err::<i32, _>(io::Error::other("error")));
 
             assert!(success_context.is_success());
             assert!(!unmet_context.is_success());
@@ -281,7 +281,7 @@ mod tests {
             let data = ArcStdMutex::new(());
             let context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .execute(|_: &()| Err::<(), _>(io::Error::new(io::ErrorKind::Other, "error")));
+                .execute(|_: &()| Err::<(), _>(io::Error::other("error")));
 
             assert!(!context.finish());
         }
@@ -293,7 +293,7 @@ mod tests {
 
             let mut context = DoubleCheckedLock::on(&data)
                 .when(|| true)
-                .execute(|_: &()| Err::<(), _>(io::Error::new(io::ErrorKind::Other, "error")));
+                .execute(|_: &()| Err::<(), _>(io::Error::other("error")));
 
             let rollback_called_clone = rollback_called.clone();
             context = context.rollback(move || {

@@ -173,7 +173,7 @@ mod tests {
                 .when(|| true)
                 .call_mut(|value: &mut i32| {
                     *value = 100;
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<i32, _>(io::Error::other("Task failed"))
                 })
                 .get_result();
 
@@ -191,7 +191,7 @@ mod tests {
                 .when(|| true)
                 .call_mut(|value: &mut i32| {
                     *value = 100;
-                    Err::<i32, _>(io::Error::new(io::ErrorKind::Other, "Task failed"))
+                    Err::<i32, _>(io::Error::other("Task failed"))
                 })
                 .rollback(|| Ok::<(), io::Error>(()))
                 .get_result();
