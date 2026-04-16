@@ -75,6 +75,9 @@ where
     /// Optional preparation action executed between first check and locking
     prepare_action: Option<BoxSupplierOnce<Result<(), Box<dyn Error + Send + Sync>>>>,
 
+    /// Whether rollback should run when condition is unmet after prepare
+    rollback_on_unmet: bool,
+
     /// Phantom data for typestate pattern, tracks current builder state
     _phantom: PhantomData<(T, State)>,
 }
@@ -102,6 +105,7 @@ where
             logger: None,
             tester: None,
             prepare_action: None,
+            rollback_on_unmet: true,
             _phantom: PhantomData,
         }
     }
@@ -131,6 +135,7 @@ where
             logger: self.logger,
             tester: self.tester,
             prepare_action: self.prepare_action,
+            rollback_on_unmet: self.rollback_on_unmet,
             _phantom: PhantomData,
         }
     }
@@ -166,6 +171,7 @@ where
             logger: self.logger,
             tester: self.tester,
             prepare_action: self.prepare_action,
+            rollback_on_unmet: self.rollback_on_unmet,
             _phantom: PhantomData,
         }
     }
@@ -233,6 +239,7 @@ where
             logger: self.logger,
             tester: self.tester,
             prepare_action: self.prepare_action,
+            rollback_on_unmet: self.rollback_on_unmet,
             _phantom: PhantomData,
         }
     }
@@ -279,6 +286,21 @@ where
         self
     }
 
+    /// Configures whether rollback should run when condition becomes unmet
+    /// after prepare action and lock acquisition.
+    ///
+    /// This option is enabled by default to provide safer transactional
+    /// semantics for prepare actions with side effects.
+    ///
+    /// # Arguments
+    ///
+    /// * `enabled` - `true` to run rollback on second-check unmet condition
+    #[inline]
+    pub fn rollback_on_unmet(mut self, enabled: bool) -> Self {
+        self.rollback_on_unmet = enabled;
+        self
+    }
+
     /// Executes a read-only task (with return value)
     ///
     /// # Execution Flow
@@ -304,8 +326,8 @@ where
         R: 'static,
     {
         let task_boxed = task.into_box();
-        let result = self.execute_with_read_lock(task_boxed);
-        ExecutionContext::new(result)
+        let (result, rollback_on_unmet) = self.execute_with_read_lock(task_boxed);
+        ExecutionContext::new_with_unmet_policy(result, rollback_on_unmet)
     }
 
     /// Executes a read-write task (with return value)
@@ -326,8 +348,8 @@ where
         R: 'static,
     {
         let task_boxed = task.into_box();
-        let result = self.execute_with_write_lock(task_boxed);
-        ExecutionContext::new(result)
+        let (result, rollback_on_unmet) = self.execute_with_write_lock(task_boxed);
+        ExecutionContext::new_with_unmet_policy(result, rollback_on_unmet)
     }
 
     /// Executes a read-only task (without return value)
@@ -366,7 +388,7 @@ where
     fn execute_with_read_lock<R, E>(
         mut self,
         task: BoxFunctionOnce<T, Result<R, E>>,
-    ) -> ExecutionResult<R, E>
+    ) -> (ExecutionResult<R, E>, bool)
     where
         E: Error + Send + Sync + 'static,
     {
@@ -379,30 +401,39 @@ where
             if let Some(ref log_config) = self.logger {
                 log::log!(log_config.level, "{}", log_config.message);
             }
-            return ExecutionResult::ConditionNotMet;
+            return (ExecutionResult::ConditionNotMet, false);
         }
 
         // Execute prepare action
+        let mut prepare_executed = false;
         if let Some(prepare_action) = self.prepare_action.take() {
+            prepare_executed = true;
             if let Err(e) = prepare_action.get() {
                 log::error!("Prepare action failed: {}", e);
-                return ExecutionResult::Failed(ExecutorError::PrepareFailed(e.to_string()));
+                return (
+                    ExecutionResult::Failed(ExecutorError::PrepareFailed(e.to_string())),
+                    false,
+                );
             }
         }
 
         // Acquire lock and execute
+        let rollback_on_unmet = self.rollback_on_unmet;
         self.lock.read(|data| {
             // Second check (inside lock)
             if !tester.test() {
                 if let Some(ref log_config) = self.logger {
                     log::log!(log_config.level, "{}", log_config.message);
                 }
-                return ExecutionResult::ConditionNotMet;
+                return (
+                    ExecutionResult::ConditionNotMet,
+                    prepare_executed && rollback_on_unmet,
+                );
             }
             // Execute task
             match task.apply(data) {
-                Ok(v) => ExecutionResult::Success(v),
-                Err(e) => ExecutionResult::Failed(ExecutorError::TaskFailed(e)),
+                Ok(v) => (ExecutionResult::Success(v), false),
+                Err(e) => (ExecutionResult::Failed(ExecutorError::TaskFailed(e)), false),
             }
         })
     }
@@ -410,7 +441,7 @@ where
     fn execute_with_write_lock<R, E>(
         mut self,
         task: BoxMutatingFunctionOnce<T, Result<R, E>>,
-    ) -> ExecutionResult<R, E>
+    ) -> (ExecutionResult<R, E>, bool)
     where
         E: Error + Send + Sync + 'static,
     {
@@ -423,30 +454,39 @@ where
             if let Some(ref log_config) = self.logger {
                 log::log!(log_config.level, "{}", log_config.message);
             }
-            return ExecutionResult::ConditionNotMet;
+            return (ExecutionResult::ConditionNotMet, false);
         }
 
         // Execute prepare action
+        let mut prepare_executed = false;
         if let Some(prepare_action) = self.prepare_action.take() {
+            prepare_executed = true;
             if let Err(e) = prepare_action.get() {
                 log::error!("Prepare action failed: {}", e);
-                return ExecutionResult::Failed(ExecutorError::PrepareFailed(e.to_string()));
+                return (
+                    ExecutionResult::Failed(ExecutorError::PrepareFailed(e.to_string())),
+                    false,
+                );
             }
         }
 
         // Acquire lock and execute
+        let rollback_on_unmet = self.rollback_on_unmet;
         self.lock.write(|data| {
             // Second check (inside lock)
             if !tester.test() {
                 if let Some(ref log_config) = self.logger {
                     log::log!(log_config.level, "{}", log_config.message);
                 }
-                return ExecutionResult::ConditionNotMet;
+                return (
+                    ExecutionResult::ConditionNotMet,
+                    prepare_executed && rollback_on_unmet,
+                );
             }
             // Execute task
             match task.apply(data) {
-                Ok(v) => ExecutionResult::Success(v),
-                Err(e) => ExecutionResult::Failed(ExecutorError::TaskFailed(e)),
+                Ok(v) => (ExecutionResult::Success(v), false),
+                Err(e) => (ExecutionResult::Failed(ExecutorError::TaskFailed(e)), false),
             }
         })
     }

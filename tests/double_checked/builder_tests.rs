@@ -426,5 +426,126 @@ mod tests {
             assert_eq!(data.read(|v| *v), 10); // Data unchanged (should not be modified)
             assert_eq!(call_count.load(Ordering::Acquire), 2); // Called twice: once outside, once inside lock
         }
+
+        #[test]
+        fn test_execution_builder_rollback_runs_on_unmet_after_prepare_by_default() {
+            use std::sync::atomic::{
+                AtomicI32,
+                Ordering,
+            };
+
+            let data = ArcStdMutex::new(10);
+            let call_count = Arc::new(AtomicI32::new(0));
+            let prepare_called = Arc::new(AtomicBool::new(false));
+            let rollback_called = Arc::new(AtomicBool::new(false));
+
+            let context = DoubleCheckedLock::on(&data)
+                .when({
+                    let call_count = call_count.clone();
+                    move || {
+                        let count = call_count.fetch_add(1, Ordering::AcqRel) + 1;
+                        count == 1
+                    }
+                })
+                .prepare({
+                    let prepare_called = prepare_called.clone();
+                    move || {
+                        prepare_called.store(true, Ordering::Release);
+                        Ok::<(), io::Error>(())
+                    }
+                })
+                .call_mut(|value: &mut i32| {
+                    *value = 20;
+                    Ok::<(), io::Error>(())
+                })
+                .rollback({
+                    let rollback_called = rollback_called.clone();
+                    move || {
+                        rollback_called.store(true, Ordering::Release);
+                        Ok::<(), io::Error>(())
+                    }
+                });
+
+            let result = context.get_result();
+
+            assert!(result.is_unmet());
+            assert!(prepare_called.load(Ordering::Acquire));
+            assert!(rollback_called.load(Ordering::Acquire));
+            assert_eq!(data.read(|v| *v), 10);
+            assert_eq!(call_count.load(Ordering::Acquire), 2);
+        }
+
+        #[test]
+        fn test_execution_builder_rollback_on_unmet_can_be_disabled() {
+            use std::sync::atomic::{
+                AtomicI32,
+                Ordering,
+            };
+
+            let data = ArcStdMutex::new(10);
+            let call_count = Arc::new(AtomicI32::new(0));
+            let rollback_called = Arc::new(AtomicBool::new(false));
+
+            let context = DoubleCheckedLock::on(&data)
+                .when({
+                    let call_count = call_count.clone();
+                    move || {
+                        let count = call_count.fetch_add(1, Ordering::AcqRel) + 1;
+                        count == 1
+                    }
+                })
+                .prepare(|| Ok::<(), io::Error>(()))
+                .rollback_on_unmet(false)
+                .call_mut(|value: &mut i32| {
+                    *value = 20;
+                    Ok::<(), io::Error>(())
+                })
+                .rollback({
+                    let rollback_called = rollback_called.clone();
+                    move || {
+                        rollback_called.store(true, Ordering::Release);
+                        Ok::<(), io::Error>(())
+                    }
+                });
+
+            let result = context.get_result();
+
+            assert!(result.is_unmet());
+            assert!(!rollback_called.load(Ordering::Acquire));
+            assert_eq!(data.read(|v| *v), 10);
+            assert_eq!(call_count.load(Ordering::Acquire), 2);
+        }
+
+        #[test]
+        fn test_execution_builder_rollback_failure_on_unmet_turns_into_failed() {
+            use std::sync::atomic::{
+                AtomicI32,
+                Ordering,
+            };
+
+            let data = ArcStdMutex::new(10);
+            let call_count = Arc::new(AtomicI32::new(0));
+
+            let context = DoubleCheckedLock::on(&data)
+                .when({
+                    let call_count = call_count.clone();
+                    move || {
+                        let count = call_count.fetch_add(1, Ordering::AcqRel) + 1;
+                        count == 1
+                    }
+                })
+                .prepare(|| Ok::<(), io::Error>(()))
+                .call_mut(|value: &mut i32| {
+                    *value = 20;
+                    Ok::<(), io::Error>(())
+                })
+                .rollback(|| Err::<(), _>(io::Error::other("rollback failed")));
+
+            let result = context.get_result();
+
+            assert!(result.is_failed());
+            assert_eq!(data.read(|v| *v), 10);
+            assert_eq!(call_count.load(Ordering::Acquire), 2);
+        }
     }
 }

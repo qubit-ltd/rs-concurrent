@@ -139,22 +139,29 @@ where
 {
     result: ExecutionResult<T, E>,
     rollback_action: Option<BoxSupplierOnce<Result<(), Box<dyn Error + Send + Sync>>>>,
+    rollback_on_unmet: bool,
 }
 
 impl<T, E> ExecutionContext<T, E>
 where
     E: std::fmt::Display,
 {
-    /// Creates a new execution context
+    /// Creates a new execution context with condition-unmet rollback policy.
     ///
     /// # Arguments
     ///
     /// * `result` - The execution result
+    /// * `rollback_on_unmet` - Whether rollback should run when result is
+    ///   `ConditionNotMet`
     #[inline]
-    pub(super) fn new(result: ExecutionResult<T, E>) -> Self {
+    pub(super) fn new_with_unmet_policy(
+        result: ExecutionResult<T, E>,
+        rollback_on_unmet: bool,
+    ) -> Self {
         Self {
             result,
             rollback_action: None,
+            rollback_on_unmet,
         }
     }
 
@@ -173,7 +180,9 @@ where
         S: SupplierOnce<Result<(), RE>> + 'static,
         RE: Error + Send + Sync + 'static,
     {
-        if let ExecutionResult::Failed(_) = self.result {
+        let should_register = matches!(self.result, ExecutionResult::Failed(_))
+            || (self.rollback_on_unmet && matches!(self.result, ExecutionResult::ConditionNotMet));
+        if should_register {
             let boxed = rollback_action.into_box();
             self.rollback_action = Some(BoxSupplierOnce::new(move || {
                 boxed
@@ -192,15 +201,21 @@ where
     /// If rollback execution fails, the error in the returned result will be
     /// updated to `RollbackFailed`.
     pub fn get_result(mut self) -> ExecutionResult<T, E> {
-        if let ExecutionResult::Failed(ref mut original_error) = self.result {
-            if let Some(rollback_action) = self.rollback_action.take() {
+        let should_execute = matches!(self.result, ExecutionResult::Failed(_))
+            || (self.rollback_on_unmet && matches!(self.result, ExecutionResult::ConditionNotMet));
+        if should_execute {
+            let original = match &self.result {
+                ExecutionResult::Failed(error) => Some(error.to_string()),
+                ExecutionResult::ConditionNotMet => Some("Condition not met".to_string()),
+                ExecutionResult::Success(_) => None,
+            };
+            if let (Some(rollback_action), Some(original)) = (self.rollback_action.take(), original) {
                 if let Err(rollback_error) = rollback_action.get() {
                     log::error!("Rollback action failed: {}", rollback_error);
-                    // Update the error to RollbackFailed
-                    *original_error = ExecutorError::RollbackFailed {
-                        original: original_error.to_string(),
+                    self.result = ExecutionResult::Failed(ExecutorError::RollbackFailed {
+                        original,
                         rollback: rollback_error.to_string(),
-                    };
+                    });
                 }
             }
         }
