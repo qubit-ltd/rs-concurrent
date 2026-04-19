@@ -23,17 +23,7 @@ use std::sync::{
 
 use parking_lot::Mutex as ParkingLotMutex;
 
-/// Non-blocking lock acquisition error.
-///
-/// This error type is used by `try_read` and `try_write` to distinguish
-/// lock contention from poisoned lock states.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TryLockError {
-    /// The lock is currently held by another thread.
-    WouldBlock,
-    /// The lock is poisoned due to a panic while the lock was held.
-    Poisoned,
-}
+use super::try_lock_error::TryLockError;
 
 /// Unified synchronous lock trait
 ///

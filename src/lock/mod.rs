@@ -22,6 +22,7 @@
 
 // Trait definitions
 mod async_lock;
+mod try_lock_error;
 mod lock;
 
 // Implementations
@@ -39,7 +40,5 @@ pub use arc_mutex::ArcMutex;
 pub use arc_rw_lock::ArcRwLock;
 pub use arc_std_mutex::ArcStdMutex;
 pub use async_lock::AsyncLock;
-pub use lock::{
-    Lock,
-    TryLockError,
-};
+pub use lock::Lock;
+pub use try_lock_error::TryLockError;
