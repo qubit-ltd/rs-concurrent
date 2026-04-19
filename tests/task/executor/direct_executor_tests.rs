@@ -6,7 +6,7 @@
  *    All rights reserved.
  *
  ******************************************************************************/
-//! Tests for [`DirectExecutor`](qubit_concurrent::DirectExecutor).
+//! Tests for [`DirectExecutor`](qubit_concurrent::task::executor::DirectExecutor).
 
 use std::{
     io,
@@ -19,13 +19,15 @@ use std::{
     },
 };
 
-use qubit_concurrent::{
+use qubit_concurrent::task::{
     BoxCallable,
     BoxRunnable,
     Callable,
-    DirectExecutor,
-    Executor,
     Runnable,
+    executor::{
+        DirectExecutor,
+        Executor,
+    },
 };
 
 #[test]
@@ -34,15 +36,28 @@ fn test_direct_executor_execute_runs_inline() {
     let value = Arc::new(AtomicUsize::new(0));
     let value_for_task = Arc::clone(&value);
 
-    executor.execute(Box::new(move || {
+    let result = executor.execute(move || {
         value_for_task.fetch_add(1, Ordering::AcqRel);
-    }));
+        Ok::<(), io::Error>(())
+    });
 
+    result.expect("direct executor should return runnable success");
     assert_eq!(value.load(Ordering::Acquire), 1);
 }
 
 #[test]
-fn test_executor_reexports_function_task_types() {
+fn test_direct_executor_call_returns_value() {
+    let executor = DirectExecutor;
+
+    let value = executor
+        .call(|| Ok::<i32, io::Error>(42))
+        .expect("direct executor should return callable value");
+
+    assert_eq!(value, 42);
+}
+
+#[test]
+fn test_task_module_reexports_function_task_types() {
     let runnable: BoxRunnable<io::Error> = Runnable::into_box(|| Ok::<(), io::Error>(()));
     runnable.run().expect("re-exported runnable should run");
 

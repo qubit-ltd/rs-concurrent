@@ -6,10 +6,7 @@
  *    All rights reserved.
  *
  ******************************************************************************/
-//! Executor implementation tests.
+//! Executor service tests.
 
-mod direct_executor_tests;
 mod thread_per_task_executor_service_tests;
-mod thread_per_task_executor_tests;
 mod tokio_executor_service_tests;
-mod tokio_executor_tests;

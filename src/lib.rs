@@ -12,8 +12,8 @@
 //!
 //! Haixing Hu
 pub mod double_checked;
-pub mod executor;
 pub mod lock;
+pub mod task;
 
 pub use double_checked::{
     BuilderError,
@@ -23,21 +23,6 @@ pub use double_checked::{
     ExecutionLogger,
     ExecutionResult,
     ExecutorError,
-};
-pub use executor::{
-    AsyncExecutor,
-    AsyncExecutorService,
-    BoxCallable,
-    BoxRunnable,
-    Callable,
-    DirectExecutor,
-    Executor,
-    ExecutorService,
-    Runnable,
-    ThreadPerTaskExecutor,
-    ThreadPerTaskExecutorService,
-    TokioExecutor,
-    TokioExecutorService,
 };
 pub use lock::{
     ArcAsyncMutex,

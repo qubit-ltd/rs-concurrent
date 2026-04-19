@@ -6,11 +6,8 @@
  *    All rights reserved.
  *
  ******************************************************************************/
-//! # Concurrent Module Tests
-//!
-//! Tests for various concurrent utility functions.
+//! Executor tests.
 
-mod docs;
-mod double_checked;
-mod lock;
-mod task;
+mod direct_executor_tests;
+mod thread_per_task_executor_tests;
+mod tokio_executor_tests;
