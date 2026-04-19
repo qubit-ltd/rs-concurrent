@@ -28,10 +28,11 @@ Qubit Concurrent 为同步和异步锁提供易于使用的包装器，为 Rust 
 - **Tokio 集成**：构建于 Tokio 的同步原语之上
 
 ### ⚙️ **任务执行**
-- **Executor**：用于提交和执行任务的 executor trait
-- **ExecutorService**：支持优雅关闭的生命周期管理
+- **Executor**：位于 `task::executor` 的执行策略 trait，`execute` 执行 `Runnable`，`call` 执行 `Callable`
+- **ExecutorService**：位于 `task::service` 的托管任务服务，提供 `submit`、`submit_callable` 和优雅关闭
+- **FutureExecutor**：执行结果载体为 Future 的特殊 Executor
 - **Runnable / Callable**：从 `qubit-function` 重新导出的、一次性可失败任务抽象
-- **灵活执行**：支持同步任务与异步任务执行
+- **清晰接收语义**：`ExecutorService` 接收任务与任务执行成功是两件事
 
 ### 🔁 **双重检查锁**
 - **DoubleCheckedLock**：可链式配置的双重检查流程（锁外/锁内两次条件判断、可选 prepare / 回滚 / 提交、`call` / `call_mut` 任务）
@@ -288,28 +289,36 @@ fn main() {
 
 ### Executor
 
-用于执行已提交任务的 trait。
+用于按执行策略运行一次性可失败任务的 trait。
+
+Executor 相关类型位于 `task::executor` 模块。
 
 **方法：**
-- [`execute(&self, task: Box<dyn FnOnce() + Send + 'static>)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Executor.html#tymethod.execute) - 执行同步任务
+- [`execute<T, E>(&self, task: T)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/executor/trait.Executor.html#method.execute) - 执行 `Runnable<E>`
+- [`call<C, R, E>(&self, task: C)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/executor/trait.Executor.html#tymethod.call) - 执行 `Callable<R, E>`
 
-### AsyncExecutor
+### FutureExecutor
 
-用于提交异步任务的 trait。
+执行结果载体为 Future 的特殊 `Executor`。
 
-**方法：**
-- [`spawn<F>(&self, future: F)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.AsyncExecutor.html#tymethod.spawn) - 提交异步任务
+`TokioExecutor` 采用该模型：`execute` 和 `call` 返回可等待的 Future。
 
 ### ExecutorService
 
-为 executor 提供生命周期管理的 trait。
+带生命周期管理的任务服务。
+
+Service 相关类型位于 `task::service` 模块。
+
+`submit` 和 `submit_callable` 返回 `Ok(handle)` 只表示服务已接收任务，不表示任务已经开始，也不表示任务执行成功。任务成功、任务返回 `Err(E)`、panic 或取消，都必须通过返回的 handle 观察。
 
 **方法：**
-- [`shutdown(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.shutdown) - 启动优雅关闭
-- [`shutdown_now(&self) -> Vec<BoxRunnable<Infallible>>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.shutdown_now) - 尝试停止所有任务并返回尚未开始执行的任务
-- [`is_shutdown(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.is_shutdown) - 检查 executor 是否已关闭
-- [`is_terminated(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.is_terminated) - 检查所有任务是否已完成
-- [`await_termination(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.await_termination) - 等待任务完成
+- [`submit<T, E>(&self, task: T)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#method.submit) - 提交 `Runnable<E>` 后台任务
+- [`submit_callable<C, R, E>(&self, task: C)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.submit_callable) - 提交 `Callable<R, E>` 任务
+- [`shutdown(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.shutdown) - 启动优雅关闭
+- [`shutdown_now(&self) -> ShutdownReport`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.shutdown_now) - 尝试立即关闭并返回计数报告
+- [`is_shutdown(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.is_shutdown) - 检查服务是否已关闭
+- [`is_terminated(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.is_terminated) - 检查所有任务是否已完成
+- [`await_termination(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.await_termination) - 等待服务终止
 
 ### Runnable 与 Callable
 

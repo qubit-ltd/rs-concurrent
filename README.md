@@ -28,10 +28,11 @@ Qubit Concurrent provides easy-to-use wrappers around both synchronous and async
 - **Tokio Integration**: Built on top of Tokio's synchronization primitives
 
 ### ⚙️ **Task Execution**
-- **Executor**: JDK-like executor trait for task submission and execution
-- **ExecutorService**: Lifecycle management with graceful shutdown support
+- **Executor**: Execution strategy trait under `task::executor`, with `execute` for `Runnable` tasks and `call` for `Callable` tasks
+- **ExecutorService**: Managed task service under `task::service`, with `submit`, `submit_callable`, and graceful shutdown support
+- **FutureExecutor**: Executor specialization whose execution carrier is a future
 - **Runnable / Callable**: Fallible one-time task abstractions re-exported from `qubit-function`
-- **Flexible Execution**: Support for both synchronous and asynchronous task execution
+- **Clear acceptance semantics**: `ExecutorService` acceptance is separate from task success
 
 ### 🔁 **Double-checked locking**
 - **DoubleCheckedLock**: Fluent builder for test-outside-lock / retest-inside-lock flows, optional prepare / rollback / commit hooks, and `call` / `call_mut` tasks
@@ -235,46 +236,33 @@ fn main() {
 ### Task Executor
 
 ```rust
-use qubit_concurrent::{AsyncExecutor, Executor};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-// Define a simple executor implementation
-struct SimpleExecutor {
-    task_count: Arc<AtomicUsize>,
-}
-
-impl Executor for SimpleExecutor {
-    fn execute(&self, task: Box<dyn FnOnce() + Send + 'static>) {
-        self.task_count.fetch_add(1, Ordering::SeqCst);
-        task();
-    }
-}
-
-impl AsyncExecutor for SimpleExecutor {
-    fn spawn<F>(&self, future: F)
-    where
-        F: std::future::Future<Output = ()> + Send + 'static,
-    {
-        tokio::spawn(future);
-    }
-}
+use qubit_concurrent::task::{
+    executor::{DirectExecutor, Executor, TokioExecutor},
+    service::{ExecutorService, ThreadPerTaskExecutorService},
+};
+use std::io;
 
 #[tokio::main]
 async fn main() {
-    let executor = SimpleExecutor {
-        task_count: Arc::new(AtomicUsize::new(0)),
-    };
+    let direct = DirectExecutor;
+    direct
+        .execute(|| Ok::<(), io::Error>(()))
+        .expect("direct execution should succeed");
 
-    // Execute synchronous task
-    executor.execute(Box::new(|| {
-        println!("Synchronous task executed");
-    }));
+    let tokio_executor = TokioExecutor;
+    let value = tokio_executor
+        .call(|| Ok::<usize, io::Error>(42))
+        .await
+        .expect("tokio execution should succeed");
+    assert_eq!(value, 42);
 
-    // Spawn asynchronous task
-    executor.spawn(async {
-        println!("Asynchronous task executed");
-    });
+    let service = ThreadPerTaskExecutorService::new();
+    let handle = service
+        .submit(|| Ok::<(), io::Error>(()))
+        .expect("submit only reports task acceptance");
+    handle.get().expect("task result is observed through the handle");
+    service.shutdown();
+    service.await_termination().await;
 }
 ```
 
@@ -334,28 +322,36 @@ An asynchronous read-write lock for Tokio runtime.
 
 ### Executor
 
-A trait for executing submitted tasks, similar to JDK's Executor interface.
+An execution strategy trait for running fallible one-time tasks.
+
+Executor-related types live under `task::executor`.
 
 **Methods:**
-- [`execute(&self, task: Box<dyn FnOnce() + Send + 'static>)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Executor.html#tymethod.execute) - Execute a synchronous task
+- [`execute<T, E>(&self, task: T)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/executor/trait.Executor.html#method.execute) - Execute a `Runnable<E>`
+- [`call<C, R, E>(&self, task: C)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/executor/trait.Executor.html#tymethod.call) - Execute a `Callable<R, E>`
 
-### AsyncExecutor
+### FutureExecutor
 
-A trait for spawning asynchronous tasks.
+A marker trait for executors whose execution carrier is a future resolving to the task result.
 
-**Methods:**
-- [`spawn<F>(&self, future: F)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.AsyncExecutor.html#tymethod.spawn) - Spawn an asynchronous task
+`TokioExecutor` implements this model: `execute` and `call` return futures.
 
 ### ExecutorService
 
-A trait providing lifecycle management for executors, similar to JDK's ExecutorService interface.
+A managed task service with submission and lifecycle APIs.
+
+Service-related types live under `task::service`.
+
+`submit` and `submit_callable` return `Ok(handle)` when the service accepts the task. That does not mean the task has started or succeeded. Task success, task failure, panic, or cancellation is observed through the returned handle.
 
 **Methods:**
-- [`shutdown(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.shutdown) - Initiate graceful shutdown
-- [`shutdown_now(&self) -> Vec<BoxRunnable<Infallible>>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.shutdown_now) - Attempt to stop all tasks and return tasks that never started
-- [`is_shutdown(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.is_shutdown) - Check if executor is shutdown
-- [`is_terminated(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.is_terminated) - Check if all tasks completed
-- [`await_termination(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.ExecutorService.html#tymethod.await_termination) - Wait for task completion
+- [`submit<T, E>(&self, task: T)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#method.submit) - Submit a `Runnable<E>` background task
+- [`submit_callable<C, R, E>(&self, task: C)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.submit_callable) - Submit a `Callable<R, E>` task
+- [`shutdown(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.shutdown) - Initiate graceful shutdown
+- [`shutdown_now(&self) -> ShutdownReport`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.shutdown_now) - Attempt immediate shutdown and return count-based status
+- [`is_shutdown(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.is_shutdown) - Check if the service is shut down
+- [`is_terminated(&self) -> bool`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.is_terminated) - Check if all tasks completed
+- [`await_termination(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/task/service/trait.ExecutorService.html#tymethod.await_termination) - Wait for service termination
 
 ### Runnable and Callable
 
