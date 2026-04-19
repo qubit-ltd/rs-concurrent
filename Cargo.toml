@@ -27,6 +27,8 @@ name = "qubit_concurrent"
 doctest = false
 
 [dependencies]
+# Core utilities
+qubit-common = "0.6"
 # Async runtime
 tokio = { version = "1.52", features = ["sync", "rt"] }
 # Error handling

@@ -15,6 +15,7 @@
 //! Haixing Hu
 use std::{error::Error, marker::PhantomData};
 
+use qubit_common::BoxError;
 use qubit_function::{
     BoxFunctionOnce, BoxMutatingFunctionOnce, BoxSupplierOnce, BoxTester, FunctionOnce,
     MutatingFunctionOnce, SupplierOnce, Tester,
@@ -68,13 +69,13 @@ where
     tester: Option<BoxTester>,
 
     /// Optional preparation action executed between first check and locking
-    prepare_action: Option<BoxSupplierOnce<Result<(), Box<dyn Error + Send + Sync>>>>,
+    prepare_action: Option<BoxSupplierOnce<Result<(), BoxError>>>,
 
     /// Optional rollback action for a successfully completed prepare action
-    rollback_prepare_action: Option<BoxSupplierOnce<Result<(), Box<dyn Error + Send + Sync>>>>,
+    rollback_prepare_action: Option<BoxSupplierOnce<Result<(), BoxError>>>,
 
     /// Optional commit action for a successfully completed prepare action
-    commit_prepare_action: Option<BoxSupplierOnce<Result<(), Box<dyn Error + Send + Sync>>>>,
+    commit_prepare_action: Option<BoxSupplierOnce<Result<(), BoxError>>>,
 
     /// Phantom data for typestate pattern, tracks current builder state
     _phantom: PhantomData<(T, State)>,
@@ -290,7 +291,7 @@ where
         self.prepare_action = Some(BoxSupplierOnce::new(move || {
             boxed
                 .get()
-                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+                .map_err(|e| Box::new(e) as BoxError)
         }));
         self
     }
@@ -321,7 +322,7 @@ where
         self.rollback_prepare_action = Some(BoxSupplierOnce::new(move || {
             boxed
                 .get()
-                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+                .map_err(|e| Box::new(e) as BoxError)
         }));
         self
     }
@@ -352,7 +353,7 @@ where
         self.commit_prepare_action = Some(BoxSupplierOnce::new(move || {
             boxed
                 .get()
-                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+                .map_err(|e| Box::new(e) as BoxError)
         }));
         self
     }
