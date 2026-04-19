@@ -31,7 +31,7 @@ Qubit Concurrent 为同步和异步锁提供易于使用的包装器，为 Rust 
 - **Executor**：位于 `task::executor` 的执行策略 trait，`execute` 执行 `Runnable`，`call` 执行 `Callable`
 - **ExecutorService**：位于 `task::service` 的托管任务服务，提供 `submit`、`submit_callable` 和优雅关闭
 - **FutureExecutor**：执行结果载体为 Future 的特殊 Executor
-- **Runnable / Callable**：从 `qubit-function` 重新导出的、一次性可失败任务抽象
+- **Runnable / Callable**：由 `qubit-function` 提供的一次性可失败任务抽象
 - **清晰接收语义**：`ExecutorService` 接收任务与任务执行成功是两件事
 
 ### 🔁 **双重检查锁**
@@ -322,12 +322,12 @@ Service 相关类型位于 `task::service` 模块。
 
 ### Runnable 与 Callable
 
-从 `qubit-function` 重新导出的任务抽象。
+由 `qubit-function` 提供的任务抽象。
 
 **方法：**
-- [`run(self) -> Result<(), E>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Runnable.html#tymethod.run) - 执行一次性可失败动作
-- [`call(self) -> Result<R, E>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Callable.html#tymethod.call) - 执行一次性可失败计算
-- [`into_box()`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Runnable.html#method.into_box) - 转换为 `BoxRunnable` 或 `BoxCallable`
+- [`run(self) -> Result<(), E>`](https://docs.rs/qubit-function/latest/qubit_function/trait.Runnable.html#tymethod.run) - 执行一次性可失败动作
+- [`call(self) -> Result<R, E>`](https://docs.rs/qubit-function/latest/qubit_function/trait.Callable.html#tymethod.call) - 执行一次性可失败计算
+- [`into_box()`](https://docs.rs/qubit-function/latest/qubit_function/trait.Runnable.html#method.into_box) - 转换为 `BoxRunnable` 或 `BoxCallable`
 
 ### DoubleCheckedLock
 
