@@ -20,6 +20,7 @@ mod executor_service;
 mod rejected_execution;
 mod shutdown_report;
 mod thread_per_task_executor_service;
+mod thread_pool;
 mod tokio_executor_service;
 mod tokio_task_handle;
 
@@ -27,5 +28,10 @@ pub use executor_service::ExecutorService;
 pub use rejected_execution::RejectedExecution;
 pub use shutdown_report::ShutdownReport;
 pub use thread_per_task_executor_service::ThreadPerTaskExecutorService;
+pub use thread_pool::{
+    ThreadPool,
+    ThreadPoolBuildError,
+    ThreadPoolBuilder,
+};
 pub use tokio_executor_service::TokioExecutorService;
 pub use tokio_task_handle::TokioTaskHandle;

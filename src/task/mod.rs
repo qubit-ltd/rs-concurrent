@@ -25,4 +25,5 @@ pub use task_execution_error::{
     TaskExecutionError,
     TaskResult,
 };
+pub(crate) use task_handle::TaskCompletion;
 pub use task_handle::TaskHandle;
