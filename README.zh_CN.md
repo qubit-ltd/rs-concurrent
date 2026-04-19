@@ -27,6 +27,10 @@ Qubit Concurrent 为同步和异步锁提供易于使用的包装器，为 Rust 
 - **非阻塞**：专为异步上下文设计，不会阻塞线程
 - **Tokio 集成**：构建于 Tokio 的同步原语之上
 
+### 🔁 **双重检查锁**
+- **DoubleCheckedLock**：可链式配置的双重检查流程（锁外/锁内两次条件判断、可选 prepare / 回滚 / 提交、`call` / `call_mut` 任务）
+- **ExecutionResult**：结构化结果（成功、条件未满足、任务或 prepare 错误等）
+
 ### 🎯 **主要优势**
 - **克隆支持**：所有锁包装器都实现了 `Clone`，便于跨线程共享
 - **类型安全**：利用 Rust 的类型系统提供编译时保证
@@ -191,6 +195,37 @@ fn main() {
 }
 ```
 
+### 双重检查锁
+
+当廉价标志已能排除读路径时（例如账户已**冻结**），可跳过加锁与昂贵的余额读取。同一条件会在加锁后再判断一次，避免在快路径通过之后、持锁前被冻结时仍执行高成本的 `read_balance`。
+
+```rust
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+
+fn read_balance(latest: &i32) -> Result<i32, std::io::Error> {
+    // 高成本：对账、远程校验等
+    Ok(*latest)
+}
+
+fn main() {
+    let balance = ArcMutex::new(1_000);
+    let frozen = Arc::new(AtomicBool::new(false));
+
+    let result = DoubleCheckedLock::on(&balance)
+        .when({
+            let frozen = frozen.clone();
+            move || !frozen.load(Ordering::Acquire)
+        })
+        .call(|cached: &i32| read_balance(cached))
+        .get_result();
+
+    assert!(result.is_success());
+    assert_eq!(result.unwrap(), 1_000);
+}
+```
+
 ## API 参考
 
 ### ArcMutex
@@ -244,6 +279,17 @@ fn main() {
 - [`try_read<F, R>(&self, f: F) -> Option<R>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcAsyncRwLock.html#method.try_read) - 尝试获取读锁（非阻塞）
 - [`try_write<F, R>(&self, f: F) -> Option<R>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcAsyncRwLock.html#method.try_write) - 尝试获取写锁（非阻塞）
 - [`clone(&self) -> Self`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcAsyncRwLock.html#method.clone) - 克隆 Arc 引用
+
+### DoubleCheckedLock
+
+双重检查锁流式 API 的入口；详见 [`DoubleCheckedLock`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.DoubleCheckedLock.html) 与 [`ExecutionBuilder`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html)。
+
+**典型步骤：**
+- [`DoubleCheckedLock::on`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.DoubleCheckedLock.html#method.on) — 绑定实现 [`Lock`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Lock.html) 的类型（例如 [`ArcMutex`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcMutex.html)、[`ArcRwLock`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html)）
+- [`ExecutionBuilder::when`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.when-1) — 快路径条件（在锁外与锁内各执行一次）
+- 可选 [`prepare`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.prepare-1) / [`rollback_prepare`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.rollback_prepare-1) / [`commit_prepare`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.commit_prepare-1)
+- [`call`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.call-1) 或 [`call_mut`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.call_mut-1) — 在锁保护下执行任务
+- [`get_result`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.get_result-1) — 得到 [`ExecutionResult`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/enum.ExecutionResult.html)
 
 ## 设计模式
 

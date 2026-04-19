@@ -33,6 +33,10 @@ Qubit Concurrent provides easy-to-use wrappers around both synchronous and async
 - **Runnable**: Task abstraction similar to Java's Runnable interface
 - **Flexible Execution**: Support for both synchronous and asynchronous task execution
 
+### 🔁 **Double-checked locking**
+- **DoubleCheckedLock**: Fluent builder for test-outside-lock / retest-inside-lock flows, optional prepare / rollback / commit hooks, and `call` / `call_mut` tasks
+- **ExecutionResult**: Structured outcomes (success, condition unmet, task error, prepare failures)
+
 ### 🎯 **Key Benefits**
 - **Clone Support**: All lock wrappers implement `Clone` for easy sharing across threads
 - **Type Safety**: Leverages Rust's type system for compile-time guarantees
@@ -197,6 +201,37 @@ fn main() {
 }
 ```
 
+### Double-checked locking
+
+Skip lock acquisition and expensive reads when a cheap flag already rules them out (for example a **frozen** account). The same predicate is evaluated again under the lock so a race where the account freezes between checks does not run the heavy `read_balance` work.
+
+```rust
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use qubit_concurrent::{DoubleCheckedLock, ArcMutex, lock::Lock};
+
+fn read_balance(latest: &i32) -> Result<i32, std::io::Error> {
+    // Expensive: ledger reconciliation, remote validation, etc.
+    Ok(*latest)
+}
+
+fn main() {
+    let balance = ArcMutex::new(1_000);
+    let frozen = Arc::new(AtomicBool::new(false));
+
+    let result = DoubleCheckedLock::on(&balance)
+        .when({
+            let frozen = frozen.clone();
+            move || !frozen.load(Ordering::Acquire)
+        })
+        .call(|cached: &i32| read_balance(cached))
+        .get_result();
+
+    assert!(result.is_success());
+    assert_eq!(result.unwrap(), 1_000);
+}
+```
+
 ### Task Executor
 
 ```rust
@@ -328,6 +363,17 @@ A trait representing a runnable task, similar to JDK's Runnable interface.
 
 **Methods:**
 - [`run(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Runnable.html#tymethod.run) - Execute the task
+
+### DoubleCheckedLock
+
+Entry point for the double-checked locking fluent API; see [`DoubleCheckedLock`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.DoubleCheckedLock.html) and [`ExecutionBuilder`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html).
+
+**Typical flow:**
+- [`DoubleCheckedLock::on`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.DoubleCheckedLock.html#method.on) — attach to a [`Lock`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/trait.Lock.html) (for example [`ArcMutex`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcMutex.html) or [`ArcRwLock`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html))
+- [`ExecutionBuilder::when`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.when-1) — fast-path predicate (evaluated twice: outside and inside the lock)
+- Optional [`prepare`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.prepare-1) / [`rollback_prepare`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.rollback_prepare-1) / [`commit_prepare`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.commit_prepare-1)
+- [`call`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.call-1) or [`call_mut`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.call_mut-1) — task under the lock
+- [`get_result`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ExecutionBuilder.html#method.get_result-1) — [`ExecutionResult`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/enum.ExecutionResult.html)
 
 ## Design Patterns
 
