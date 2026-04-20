@@ -10,4 +10,5 @@
 
 mod executor;
 mod service;
+mod task_execution_error_tests;
 mod task_handle_tests;

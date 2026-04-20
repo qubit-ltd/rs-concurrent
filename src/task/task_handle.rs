@@ -58,7 +58,13 @@ struct TaskHandleInner<R, E> {
 struct TaskHandleState<R, E> {
     result: Option<TaskResult<R, E>>,
     started: bool,
+    completed: bool,
     waker: Option<Waker>,
+}
+
+/// Completion endpoint owned by the task runner.
+pub(crate) struct TaskCompletion<R, E> {
+    inner: Arc<TaskHandleInner<R, E>>,
 }
 
 impl<R, E> TaskHandle<R, E> {
@@ -72,6 +78,7 @@ impl<R, E> TaskHandle<R, E> {
             state: Mutex::new(TaskHandleState {
                 result: None,
                 started: false,
+                completed: false,
                 waker: None,
             }),
             completed: Condvar::new(),
@@ -96,8 +103,11 @@ impl<R, E> TaskHandle<R, E> {
     pub fn get(self) -> TaskResult<R, E> {
         let mut state = self.inner.lock_state();
         loop {
-            if let Some(result) = state.result.take() {
-                return result;
+            if state.completed {
+                return state
+                    .result
+                    .take()
+                    .expect("task handle completed without a result");
             }
             state = self
                 .inner
@@ -141,8 +151,13 @@ impl<R, E> Future for TaskHandle<R, E> {
     /// Polls this handle for the accepted task's final result.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.inner.lock_state();
-        if let Some(result) = state.result.take() {
-            Poll::Ready(result)
+        if state.completed {
+            Poll::Ready(
+                state
+                    .result
+                    .take()
+                    .expect("task handle completed without a result"),
+            )
         } else {
             state.waker = Some(cx.waker().clone());
             Poll::Pending
@@ -157,11 +172,6 @@ impl<R, E> TaskHandleInner<R, E> {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
-}
-
-/// Completion endpoint owned by the task runner.
-pub(crate) struct TaskCompletion<R, E> {
-    inner: Arc<TaskHandleInner<R, E>>,
 }
 
 impl<R, E> Clone for TaskCompletion<R, E> {
@@ -182,7 +192,7 @@ impl<R, E> TaskCompletion<R, E> {
     /// already completed through cancellation.
     pub(crate) fn start(&self) -> bool {
         let mut state = self.inner.lock_state();
-        if state.result.is_some() {
+        if state.completed {
             false
         } else {
             state.started = true;
@@ -213,10 +223,11 @@ impl<R, E> TaskCompletion<R, E> {
         F: FnOnce(&TaskHandleState<R, E>) -> bool,
     {
         let mut state = self.inner.lock_state();
-        if state.result.is_some() || !can_finish(&state) {
+        if state.completed || !can_finish(&state) {
             return false;
         }
         state.result = Some(result);
+        state.completed = true;
         self.inner.done.store(true);
         let waker = state.waker.take();
         drop(state);

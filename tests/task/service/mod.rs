@@ -8,6 +8,7 @@
  ******************************************************************************/
 //! Executor service tests.
 
+mod task_execution_service_tests;
 mod thread_per_task_executor_service_tests;
 mod thread_pool_tests;
 mod tokio_executor_service_tests;

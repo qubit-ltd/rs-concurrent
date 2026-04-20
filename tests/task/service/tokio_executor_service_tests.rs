@@ -101,3 +101,35 @@ async fn test_tokio_executor_service_shutdown_now_aborts_running_task_handle() {
     assert!(service.is_terminated());
     assert!(matches!(handle.await, Err(TaskExecutionError::Cancelled)));
 }
+
+#[tokio::test]
+async fn test_tokio_task_handle_cancel_requests_abort() {
+    let service = TokioExecutorService::new();
+
+    let handle = service
+        .submit(|| {
+            std::thread::sleep(Duration::from_secs(1));
+            Ok::<(), io::Error>(())
+        })
+        .expect("service should accept task");
+
+    assert!(handle.cancel());
+    tokio::task::yield_now().await;
+    assert!(handle.is_done());
+    assert!(matches!(handle.await, Err(TaskExecutionError::Cancelled)));
+    service.shutdown();
+    service.await_termination().await;
+}
+
+#[tokio::test]
+async fn test_tokio_task_handle_reports_panicked_task() {
+    let service = TokioExecutorService::new();
+
+    let handle = service
+        .submit(|| -> Result<(), io::Error> { panic!("tokio service panic") })
+        .expect("service should accept panicking task");
+
+    assert!(matches!(handle.await, Err(TaskExecutionError::Panicked)));
+    service.shutdown();
+    service.await_termination().await;
+}

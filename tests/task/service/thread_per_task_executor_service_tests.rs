@@ -66,6 +66,17 @@ fn test_thread_per_task_executor_service_submit_callable_returns_value() {
 }
 
 #[test]
+fn test_thread_per_task_executor_service_reports_panicked_task() {
+    let service = ThreadPerTaskExecutorService::new();
+
+    let handle = service
+        .submit(|| -> Result<(), io::Error> { panic!("thread per task service panic") })
+        .expect("service should accept panicking task");
+
+    assert!(matches!(handle.get(), Err(TaskExecutionError::Panicked)));
+}
+
+#[test]
 fn test_thread_per_task_executor_service_shutdown_rejects_new_tasks() {
     let service = ThreadPerTaskExecutorService::new();
     service.shutdown();

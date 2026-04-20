@@ -136,9 +136,9 @@ impl ExecutorService for TokioExecutorService {
         self.state.active_tasks.inc();
         drop(submission_guard);
 
-        let state = Arc::clone(&self.state);
+        let guard = TokioServiceTaskGuard::new(Arc::clone(&self.state));
         let handle = tokio::spawn(async move {
-            let _guard = TokioServiceTaskGuard::new(state);
+            let _guard = guard;
             match tokio::task::spawn_blocking(move || run_callable(task)).await {
                 Ok(result) => result,
                 Err(error) if error.is_cancelled() => Err(TaskExecutionError::Cancelled),
