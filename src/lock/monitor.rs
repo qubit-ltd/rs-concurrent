@@ -283,16 +283,16 @@ impl<T> Monitor<T> {
     ///
     /// use qubit_concurrent::lock::Monitor;
     ///
-    /// let monitor = Arc::new(Monitor::new(0_u32));
+    /// let monitor = Arc::new(Monitor::new(false));
     /// let mut handles = Vec::new();
     /// for _ in 0..2 {
     ///     let m = Arc::clone(&monitor);
     ///     handles.push(thread::spawn(move || {
-    ///         m.wait_until(|n| *n >= 2, |n| *n -= 1);
+    ///         m.wait_until(|ready| *ready, |_| ());
     ///     }));
     /// }
     ///
-    /// monitor.write(|n| *n = 2);
+    /// monitor.write(|ready| *ready = true);
     /// monitor.notify_all();
     /// for h in handles {
     ///     h.join().expect("waiter should finish");

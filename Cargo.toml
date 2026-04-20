@@ -24,7 +24,7 @@ exclude = [
 
 [lib]
 name = "qubit_concurrent"
-doctest = false
+doctest = true
 
 [dependencies]
 # Core utilities
