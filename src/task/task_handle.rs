@@ -9,12 +9,7 @@
 use std::{
     future::Future,
     pin::Pin,
-    sync::{
-        Arc,
-        Condvar,
-        Mutex,
-        MutexGuard,
-    },
+    sync::Arc,
     task::{
         Context,
         Poll,
@@ -23,6 +18,8 @@ use std::{
 };
 
 use qubit_atomic::AtomicBool;
+
+use crate::lock::Monitor;
 
 use super::{
     TaskExecutionError,
@@ -49,8 +46,7 @@ pub struct TaskHandle<R, E> {
 
 /// Shared state used by a task handle and its completing runner.
 struct TaskHandleInner<R, E> {
-    state: Mutex<TaskHandleState<R, E>>,
-    completed: Condvar,
+    state: Monitor<TaskHandleState<R, E>>,
     done: AtomicBool,
 }
 
@@ -75,13 +71,12 @@ impl<R, E> TaskHandle<R, E> {
     /// A handle for the caller and a completion endpoint for the runner.
     pub(crate) fn completion_pair() -> (Self, TaskCompletion<R, E>) {
         let inner = Arc::new(TaskHandleInner {
-            state: Mutex::new(TaskHandleState {
+            state: Monitor::new(TaskHandleState {
                 result: None,
                 started: false,
                 completed: false,
                 waker: None,
             }),
-            completed: Condvar::new(),
             done: AtomicBool::new(false),
         });
         let handle = Self {
@@ -101,20 +96,15 @@ impl<R, E> TaskHandle<R, E> {
     /// panics, or is cancelled before producing a value, the corresponding
     /// [`TaskExecutionError`] is returned.
     pub fn get(self) -> TaskResult<R, E> {
-        let mut state = self.inner.lock_state();
-        loop {
-            if state.completed {
-                return state
+        self.inner.state.wait_until(
+            |state| state.completed,
+            |state| {
+                state
                     .result
                     .take()
-                    .expect("task handle completed without a result");
-            }
-            state = self
-                .inner
-                .completed
-                .wait(state)
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-        }
+                    .expect("task handle completed without a result")
+            },
+        )
     }
 
     /// Returns whether the task has reported completion.
@@ -150,27 +140,31 @@ impl<R, E> Future for TaskHandle<R, E> {
 
     /// Polls this handle for the accepted task's final result.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut state = self.inner.lock_state();
-        if state.completed {
-            Poll::Ready(
-                state
-                    .result
-                    .take()
-                    .expect("task handle completed without a result"),
-            )
+        let result = self.inner.state.write(|state| {
+            if state.completed {
+                Some(
+                    state
+                        .result
+                        .take()
+                        .expect("task handle completed without a result"),
+                )
+            } else {
+                state.waker = Some(cx.waker().clone());
+                None
+            }
+        });
+        if let Some(result) = result {
+            Poll::Ready(result)
         } else {
-            state.waker = Some(cx.waker().clone());
             Poll::Pending
         }
     }
 }
 
 impl<R, E> TaskHandleInner<R, E> {
-    /// Acquires the shared completion state while tolerating poisoned locks.
-    fn lock_state(&self) -> MutexGuard<'_, TaskHandleState<R, E>> {
-        self.state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    /// Notifies every waiter that the shared task state may have changed.
+    fn notify_completion(&self) {
+        self.state.notify_all();
     }
 }
 
@@ -191,13 +185,14 @@ impl<R, E> TaskCompletion<R, E> {
     /// `true` if the runner should execute the task, or `false` if the task was
     /// already completed through cancellation.
     pub(crate) fn start(&self) -> bool {
-        let mut state = self.inner.lock_state();
-        if state.completed {
-            false
-        } else {
-            state.started = true;
-            true
-        }
+        self.inner.state.write(|state| {
+            if state.completed {
+                false
+            } else {
+                state.started = true;
+                true
+            }
+        })
     }
 
     /// Completes the task with its final result.
@@ -222,16 +217,19 @@ impl<R, E> TaskCompletion<R, E> {
     where
         F: FnOnce(&TaskHandleState<R, E>) -> bool,
     {
-        let mut state = self.inner.lock_state();
-        if state.completed || !can_finish(&state) {
+        let (published, waker) = self.inner.state.write(|state| {
+            if state.completed || !can_finish(state) {
+                return (false, None);
+            }
+            state.result = Some(result);
+            state.completed = true;
+            self.inner.done.store(true);
+            (true, state.waker.take())
+        });
+        if !published {
             return false;
         }
-        state.result = Some(result);
-        state.completed = true;
-        self.inner.done.store(true);
-        let waker = state.waker.take();
-        drop(state);
-        self.inner.completed.notify_all();
+        self.inner.notify_completion();
         if let Some(waker) = waker {
             waker.wake();
         }
