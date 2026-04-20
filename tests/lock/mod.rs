@@ -14,6 +14,7 @@
 // Trait tests
 mod async_lock_tests;
 mod lock_tests;
+mod monitor_tests;
 
 // Implementation tests
 mod arc_async_mutex_tests;

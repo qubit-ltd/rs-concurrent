@@ -18,6 +18,7 @@ Qubit Concurrent provides easy-to-use wrappers around both synchronous and async
 ### 🔒 **Synchronous Locks**
 - **ArcMutex**: Thread-safe mutual exclusion lock wrapper with `Arc` integration
 - **ArcRwLock**: Thread-safe read-write lock wrapper supporting multiple concurrent readers
+- **Monitor**: Condition-based state coordination backed by `Mutex` and `Condvar`
 - **Convenient API**: `read`/`write` and `try_read`/`try_write` methods for cleaner lock handling
 - **Automatic RAII**: Ensures proper lock release through scope-based management
 
@@ -202,6 +203,39 @@ fn main() {
 }
 ```
 
+### Condition-Based Monitor
+
+```rust
+use std::{
+    sync::Arc,
+    thread,
+};
+
+use qubit_concurrent::Monitor;
+
+fn main() {
+    let monitor = Arc::new(Monitor::new(Vec::<String>::new()));
+    let worker_monitor = Arc::clone(&monitor);
+
+    let worker = thread::spawn(move || {
+        worker_monitor.wait_until(
+            |messages| !messages.is_empty(),
+            |messages| messages.pop().expect("message should be ready"),
+        )
+    });
+
+    monitor.write(|messages| {
+        messages.push("ready".to_string());
+    });
+    monitor.notify_one();
+
+    assert_eq!(
+        worker.join().expect("worker should finish"),
+        "ready",
+    );
+}
+```
+
 ### Double-checked locking
 
 Skip lock acquisition and expensive reads when a cheap flag already rules them out (for example a **frozen** account). The same predicate is evaluated again under the lock so a race where the account freezes between checks does not run the heavy `read_balance` work.
@@ -295,6 +329,24 @@ A synchronous read-write lock wrapper supporting multiple concurrent readers.
 - [`try_read_result<F, R>(&self, f: F) -> Result<R, TryLockError>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html#method.try_read_result) - Try to acquire read lock with a detailed error
 - [`try_write_result<F, R>(&self, f: F) -> Result<R, TryLockError>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html#method.try_write_result) - Try to acquire write lock with a detailed error
 - [`clone(&self) -> Self`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html#method.clone) - Clone the Arc reference
+
+### Monitor
+
+A synchronous monitor for condition-based state coordination.
+
+`Monitor` combines a `Mutex` with a `Condvar`. Use it when a thread should
+sleep until protected state satisfies a predicate, such as waiting for queued
+work, a completion flag, or available permits. Poisoned mutexes are recovered
+by taking the inner state, so coordination state remains observable after a
+thread panics while holding the lock.
+
+**Methods:**
+- [`new(data: T) -> Self`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.new) - Create a new monitor
+- [`read<F, R>(&self, f: F) -> R`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.read) - Read protected state
+- [`write<F, R>(&self, f: F) -> R`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.write) - Mutate protected state
+- [`wait_until<P, F, R>(&self, ready: P, f: F) -> R`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.wait_until) - Wait until a predicate is true, then mutate the state
+- [`notify_one(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.notify_one) - Wake one waiting thread
+- [`notify_all(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.notify_all) - Wake all waiting threads
 
 ### ArcAsyncMutex
 
@@ -404,6 +456,13 @@ This design provides several benefits:
 3. **Reference Counting**: Automatic cleanup when last reference is dropped
 4. **Type Safety**: Compiler ensures proper usage patterns
 
+### Monitor Coordination
+
+Use `Monitor` when a thread should wait for a state transition instead of
+polling. Update the protected state with `write`, then call `notify_one` or
+`notify_all`. Waiting code should use `wait_until` so spurious notifications
+cannot let it proceed before the predicate is actually true.
+
 ## Use Cases
 
 ### 1. Shared Counter
@@ -451,7 +510,7 @@ tokio::spawn(async move {
 ## Dependencies
 
 - **tokio**: Async runtime and synchronization primitives (features: `sync`)
-- **std**: Standard library synchronization primitives (`Mutex`, `RwLock`, `Arc`)
+- **std**: Standard library synchronization primitives (`Mutex`, `RwLock`, `Condvar`, `Arc`)
 
 ## Testing & Code Coverage
 
@@ -476,6 +535,7 @@ The test suite covers:
 - ✅ **Lock contention scenarios** - Testing under high contention
 - ✅ **Try lock operations** - Non-blocking lock attempts
 - ✅ **Poison handling** - Synchronous lock poisoning scenarios
+- ✅ **Monitor coordination** - Predicate waiting, notifications, and poison recovery
 
 ### Running Tests
 

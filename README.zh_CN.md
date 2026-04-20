@@ -18,6 +18,7 @@ Qubit Concurrent 为同步和异步锁提供易于使用的包装器，为 Rust 
 ### 🔒 **同步锁**
 - **ArcMutex**：集成 `Arc` 的线程安全互斥锁包装器
 - **ArcRwLock**：支持多个并发读者的线程安全读写锁包装器
+- **Monitor**：基于 `Mutex` 和 `Condvar` 的条件状态协调原语
 - **便捷 API**：提供 `read`/`write` 与 `try_read`/`try_write` 方法，实现更清晰的锁处理
 - **自动 RAII**：通过基于作用域的管理确保正确释放锁
 
@@ -202,6 +203,39 @@ fn main() {
 }
 ```
 
+### 基于条件的 Monitor
+
+```rust
+use std::{
+    sync::Arc,
+    thread,
+};
+
+use qubit_concurrent::Monitor;
+
+fn main() {
+    let monitor = Arc::new(Monitor::new(Vec::<String>::new()));
+    let worker_monitor = Arc::clone(&monitor);
+
+    let worker = thread::spawn(move || {
+        worker_monitor.wait_until(
+            |messages| !messages.is_empty(),
+            |messages| messages.pop().expect("message should be ready"),
+        )
+    });
+
+    monitor.write(|messages| {
+        messages.push("ready".to_string());
+    });
+    monitor.notify_one();
+
+    assert_eq!(
+        worker.join().expect("worker should finish"),
+        "ready",
+    );
+}
+```
+
 ### 双重检查锁
 
 当廉价标志已能排除读路径时（例如账户已**冻结**），可跳过加锁与昂贵的余额读取。同一条件会在加锁后再判断一次，避免在快路径通过之后、持锁前被冻结时仍执行高成本的 `read_balance`。
@@ -262,6 +296,23 @@ fn main() {
 - [`try_read_result<F, R>(&self, f: F) -> Result<R, TryLockError>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html#method.try_read_result) - 尝试获取读锁并返回详细错误
 - [`try_write_result<F, R>(&self, f: F) -> Result<R, TryLockError>`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html#method.try_write_result) - 尝试获取写锁并返回详细错误
 - [`clone(&self) -> Self`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/struct.ArcRwLock.html#method.clone) - 克隆 Arc 引用
+
+### Monitor
+
+用于基于条件进行状态协调的同步 monitor。
+
+`Monitor` 组合了一个 `Mutex` 和一个 `Condvar`。当线程需要等待受保护
+状态满足某个条件时，可以使用它，例如等待队列中出现任务、完成标志变为
+真，或许可数量可用。毒化的 mutex 会通过取出内部状态的方式恢复，因此
+即使某个线程持锁时 panic，协调状态仍然可以被观察和继续使用。
+
+**方法：**
+- [`new(data: T) -> Self`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.new) - 创建新的 monitor
+- [`read<F, R>(&self, f: F) -> R`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.read) - 读取受保护状态
+- [`write<F, R>(&self, f: F) -> R`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.write) - 修改受保护状态
+- [`wait_until<P, F, R>(&self, ready: P, f: F) -> R`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.wait_until) - 等待条件为真，然后修改状态
+- [`notify_one(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.notify_one) - 唤醒一个等待线程
+- [`notify_all(&self)`](https://docs.rs/qubit-concurrent/latest/qubit_concurrent/lock/struct.Monitor.html#method.notify_all) - 唤醒所有等待线程
 
 ### ArcAsyncMutex
 
@@ -371,6 +422,12 @@ let lock = Arc::new(ArcMutex::new(0));  // 不要这样做！
 3. **引用计数**：当最后一个引用被丢弃时自动清理
 4. **类型安全**：编译器确保正确的使用模式
 
+### Monitor 协调
+
+当线程应该等待某个状态变化，而不是轮询时，使用 `Monitor`。通过 `write`
+更新受保护状态，然后调用 `notify_one` 或 `notify_all`。等待方应使用
+`wait_until`，这样即使出现虚假通知，也不会在条件真正满足前继续执行。
+
 ## 使用场景
 
 ### 1. 共享计数器
@@ -418,7 +475,7 @@ tokio::spawn(async move {
 ## 依赖项
 
 - **tokio**：异步运行时和同步原语（features: `sync`）
-- **std**：标准库同步原语（`Mutex`、`RwLock`、`Arc`）
+- **std**：标准库同步原语（`Mutex`、`RwLock`、`Condvar`、`Arc`）
 
 ## 测试与代码覆盖率
 
@@ -443,6 +500,7 @@ tokio::spawn(async move {
 - ✅ **锁竞争场景** - 高竞争环境下的测试
 - ✅ **尝试加锁操作** - 非阻塞锁尝试
 - ✅ **毒化处理** - 同步锁毒化场景
+- ✅ **Monitor 协调** - 条件等待、通知和毒化恢复
 
 ### 运行测试
 

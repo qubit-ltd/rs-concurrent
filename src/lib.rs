@@ -31,5 +31,6 @@ pub use lock::{
     ArcRwLock,
     AsyncLock,
     Lock,
+    Monitor,
     TryLockError,
 };
