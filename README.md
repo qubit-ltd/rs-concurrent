@@ -51,7 +51,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-concurrent = "0.6.0"
+qubit-concurrent = "0.5.0"
 ```
 
 ## Quick Start
