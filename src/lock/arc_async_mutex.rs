@@ -37,12 +37,15 @@ use crate::lock::AsyncLock;
 ///
 /// # Usage Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use qubit_concurrent::lock::{ArcAsyncMutex, AsyncLock};
 /// use std::sync::Arc;
 ///
-/// #[tokio::main]
-/// async fn main() {
+/// let rt = tokio::runtime::Builder::new_current_thread()
+///     .enable_all()
+///     .build()
+///     .unwrap();
+/// rt.block_on(async {
 ///     let counter = ArcAsyncMutex::new(0);
 ///     let counter = Arc::new(counter);
 ///
@@ -56,7 +59,7 @@ use crate::lock::AsyncLock;
 ///     if let Some(value) = counter.try_read(|c| *c) {
 ///         println!("Current value: {}", value);
 ///     }
-/// }
+/// });
 /// ```
 ///
 /// # Author
@@ -80,7 +83,7 @@ impl<T> ArcAsyncMutex<T> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::ArcAsyncMutex;
     ///
     /// let lock = ArcAsyncMutex::new(42);
@@ -115,11 +118,14 @@ where
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{ArcAsyncMutex, AsyncLock};
     ///
-    /// #[tokio::main]
-    /// async fn main() {
+    /// let rt = tokio::runtime::Builder::new_current_thread()
+    ///     .enable_all()
+    ///     .build()
+    ///     .unwrap();
+    /// rt.block_on(async {
     ///     let counter = ArcAsyncMutex::new(0);
     ///
     ///     let result = counter.write(|c| {
@@ -128,7 +134,7 @@ where
     ///     }).await;
     ///
     ///     println!("Counter value: {}", result);
-    /// }
+    /// });
     /// ```
     #[inline]
     async fn read<R, F>(&self, f: F) -> R

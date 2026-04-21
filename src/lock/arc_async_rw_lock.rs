@@ -45,11 +45,14 @@ use crate::lock::AsyncLock;
 ///
 /// # Usage Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use qubit_concurrent::lock::{ArcAsyncRwLock, AsyncLock};
 ///
-/// #[tokio::main]
-/// async fn main() {
+/// let rt = tokio::runtime::Builder::new_current_thread()
+///     .enable_all()
+///     .build()
+///     .unwrap();
+/// rt.block_on(async {
 ///     let data = ArcAsyncRwLock::new(String::from("Hello"));
 ///
 ///     // Multiple read operations can execute concurrently
@@ -62,7 +65,7 @@ use crate::lock::AsyncLock;
 ///         s.push_str(" World!");
 ///         println!("Write: {}", s);
 ///     }).await;
-/// }
+/// });
 /// ```
 ///
 /// # Author
@@ -86,7 +89,7 @@ impl<T> ArcAsyncRwLock<T> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::ArcAsyncRwLock;
     ///
     /// let rw_lock = ArcAsyncRwLock::new(vec![1, 2, 3]);
@@ -121,16 +124,19 @@ where
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{ArcAsyncRwLock, AsyncLock};
     ///
-    /// #[tokio::main]
-    /// async fn main() {
+    /// let rt = tokio::runtime::Builder::new_current_thread()
+    ///     .enable_all()
+    ///     .build()
+    ///     .unwrap();
+    /// rt.block_on(async {
     ///     let data = ArcAsyncRwLock::new(vec![1, 2, 3]);
     ///
     ///     let length = data.read(|v| v.len()).await;
     ///     println!("Vector length: {}", length);
-    /// }
+    /// });
     /// ```
     #[inline]
     async fn read<R, F>(&self, f: F) -> R
@@ -161,18 +167,21 @@ where
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{ArcAsyncRwLock, AsyncLock};
     ///
-    /// #[tokio::main]
-    /// async fn main() {
+    /// let rt = tokio::runtime::Builder::new_current_thread()
+    ///     .enable_all()
+    ///     .build()
+    ///     .unwrap();
+    /// rt.block_on(async {
     ///     let data = ArcAsyncRwLock::new(vec![1, 2, 3]);
     ///
     ///     data.write(|v| {
     ///         v.push(4);
     ///         println!("Added element, new length: {}", v.len());
     ///     }).await;
-    /// }
+    /// });
     /// ```
     #[inline]
     async fn write<R, F>(&self, f: F) -> R

@@ -22,7 +22,7 @@ use thiserror::Error;
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust
 /// use qubit_concurrent::double_checked::BuilderError;
 ///
 /// let error = BuilderError::MissingTester;

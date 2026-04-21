@@ -21,11 +21,12 @@
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// use log::Level;
-/// use qubit_concurrent::double_checked::{ExecutionLogger, ExecutorConfig};
+/// ```rust
+/// use qubit_concurrent::double_checked::ExecutorConfig;
 ///
-/// let _logger = ExecutionLogger::new(Level::Warn, "Service is not running");
+/// let config = ExecutorConfig::default();
+/// assert!(!config.enable_metrics);
+/// assert!(!config.disable_backtrace);
 /// ```
 ///
 /// # Author

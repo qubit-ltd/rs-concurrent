@@ -109,11 +109,14 @@ pub trait AsyncLock<T: ?Sized> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
     ///
-    /// #[tokio::main]
-    /// async fn main() {
+    /// let rt = tokio::runtime::Builder::new_current_thread()
+    ///     .enable_all()
+    ///     .build()
+    ///     .unwrap();
+    /// rt.block_on(async {
     ///     let lock = ArcAsyncRwLock::new(vec![1, 2, 3]);
     ///
     ///     // Read operation - allows concurrent readers with RwLock
@@ -125,7 +128,7 @@ pub trait AsyncLock<T: ?Sized> {
     ///         data.iter().sum::<i32>()
     ///     ).await;
     ///     assert_eq!(sum, 6);
-    /// }
+    /// });
     /// ```
     fn read<R, F>(&self, f: F) -> impl Future<Output = R> + Send
     where
@@ -164,11 +167,14 @@ pub trait AsyncLock<T: ?Sized> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
     ///
-    /// #[tokio::main]
-    /// async fn main() {
+    /// let rt = tokio::runtime::Builder::new_current_thread()
+    ///     .enable_all()
+    ///     .build()
+    ///     .unwrap();
+    /// rt.block_on(async {
     ///     let lock = ArcAsyncRwLock::new(vec![1, 2, 3]);
     ///
     ///     // Write operation - exclusive access
@@ -180,7 +186,7 @@ pub trait AsyncLock<T: ?Sized> {
     ///     // Verify the changes
     ///     let result = lock.read(|data| data.clone()).await;
     ///     assert_eq!(result, vec![1, 2, 3, 4]);
-    /// }
+    /// });
     /// ```
     fn write<R, F>(&self, f: F) -> impl Future<Output = R> + Send
     where
@@ -206,7 +212,7 @@ pub trait AsyncLock<T: ?Sized> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncRwLock};
     ///
     /// let lock = ArcAsyncRwLock::new(42);
@@ -239,7 +245,7 @@ pub trait AsyncLock<T: ?Sized> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{AsyncLock, ArcAsyncMutex};
     ///
     /// let lock = ArcAsyncMutex::new(42);

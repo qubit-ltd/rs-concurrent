@@ -29,17 +29,15 @@ use std::fmt;
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust
 /// use qubit_concurrent::double_checked::ExecutorError;
 ///
 /// let error: ExecutorError<String> =
-///     ExecutorError::ConditionNotMet;
+///     ExecutorError::TaskFailed("task failed".to_string());
 /// println!("Error: {}", error);
 ///
 /// let error_with_msg: ExecutorError<String> =
-///     ExecutorError::ConditionNotMetWithMessage(
-///         "Service is not running".to_string()
-///     );
+///     ExecutorError::PrepareFailed("Service is not running".to_string());
 /// println!("Error: {}", error_with_msg);
 /// ```
 ///

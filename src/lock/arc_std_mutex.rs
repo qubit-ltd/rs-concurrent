@@ -41,7 +41,7 @@ use crate::lock::{
 ///
 /// # Usage Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use qubit_concurrent::lock::{ArcStdMutex, Lock};
 /// use std::sync::Arc;
 ///
@@ -55,7 +55,7 @@ use crate::lock::{
 /// });
 ///
 /// // Try to acquire lock
-/// if let Some(value) = counter.try_read(|c| *c) {
+/// if let Ok(value) = counter.try_read(|c| *c) {
 ///     println!("Current value: {}", value);
 /// }
 /// ```
@@ -81,7 +81,7 @@ impl<T> ArcStdMutex<T> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::ArcStdMutex;
     ///
     /// let lock = ArcStdMutex::new(42);
@@ -111,7 +111,7 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{ArcStdMutex, Lock};
     ///
     /// let counter = ArcStdMutex::new(42);
@@ -144,8 +144,8 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use qubit_concurrent::lock::{ArcMutex, Lock};
+    /// ```rust
+    /// use qubit_concurrent::lock::{ArcStdMutex, Lock};
     ///
     /// let counter = ArcStdMutex::new(0);
     ///
@@ -182,7 +182,7 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use qubit_concurrent::lock::{ArcStdMutex, Lock};
     ///
     /// let counter = ArcStdMutex::new(42);
@@ -222,8 +222,8 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use qubit_concurrent::lock::{ArcMutex, Lock};
+    /// ```rust
+    /// use qubit_concurrent::lock::{ArcStdMutex, Lock};
     ///
     /// let counter = ArcStdMutex::new(0);
     ///

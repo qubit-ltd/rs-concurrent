@@ -29,7 +29,7 @@ use crate::double_checked::executor_error::ExecutorError;
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust
 /// use qubit_concurrent::double_checked::{ExecutionResult, ExecutorError};
 ///
 /// let success: ExecutionResult<i32, String> = ExecutionResult::success(42);
