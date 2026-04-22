@@ -659,6 +659,26 @@ fn test_thread_pool_prestart_reports_build_spawn_failure() {
 }
 
 #[test]
+fn test_thread_pool_build_error_from_rejected_execution_shutdown() {
+    let error: ThreadPoolBuildError = RejectedExecution::Shutdown.into();
+
+    let ThreadPoolBuildError::SpawnWorker { source, .. } = error else {
+        panic!("expected spawn worker build error");
+    };
+    assert_eq!(source.to_string(), "thread pool shut down during prestart");
+}
+
+#[test]
+fn test_thread_pool_build_error_from_rejected_execution_saturated() {
+    let error: ThreadPoolBuildError = RejectedExecution::Saturated.into();
+
+    let ThreadPoolBuildError::SpawnWorker { source, .. } = error else {
+        panic!("expected spawn worker build error");
+    };
+    assert_eq!(source.to_string(), "thread pool saturated during prestart");
+}
+
+#[test]
 fn test_rejected_execution_compares_by_variant() {
     let left = RejectedExecution::WorkerSpawnFailed {
         source: Arc::new(io::Error::other("left")),

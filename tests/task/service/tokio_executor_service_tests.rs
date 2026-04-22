@@ -167,3 +167,20 @@ async fn test_tokio_task_handle_reports_panicked_task() {
     service.shutdown();
     service.await_termination().await;
 }
+
+#[tokio::test]
+async fn test_tokio_task_handle_panicked_is_not_cancelled() {
+    let service = TokioExecutorService::new();
+
+    let handle = service
+        .submit(|| -> Result<(), io::Error> { panic!("tokio service panic") })
+        .expect("service should accept panicking task");
+
+    let error = handle
+        .await
+        .expect_err("panicked task should return execution error");
+    assert!(error.is_panicked());
+    assert!(!error.is_cancelled());
+    service.shutdown();
+    service.await_termination().await;
+}

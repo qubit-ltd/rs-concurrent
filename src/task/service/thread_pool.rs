@@ -735,6 +735,21 @@ impl ThreadPoolBuildError {
     }
 }
 
+impl From<RejectedExecution> for ThreadPoolBuildError {
+    /// Converts rejected-execution reasons into build-time thread-pool errors.
+    ///
+    /// # Parameters
+    ///
+    /// * `error` - Rejection reason observed during thread prestart.
+    ///
+    /// # Returns
+    ///
+    /// A build error that preserves equivalent failure context.
+    fn from(error: RejectedExecution) -> Self {
+        Self::from_rejected_execution(error)
+    }
+}
+
 /// Point-in-time counters reported by [`ThreadPool`].
 ///
 /// The snapshot is intended for monitoring and tests. It is not a stable
