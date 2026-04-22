@@ -14,10 +14,7 @@
 
 use std::marker::PhantomData;
 
-use super::{
-    ExecutionLogger,
-    executor_lock_builder::ExecutorLockBuilder,
-};
+use super::{ExecutionLogger, executor_lock_builder::ExecutorLockBuilder};
 use crate::lock::Lock;
 
 /// Initial builder for [`super::DoubleCheckedLockExecutor`].

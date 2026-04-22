@@ -14,32 +14,17 @@
 //!
 //! Haixing Hu
 
-use std::{
-    fmt::Display,
-    marker::PhantomData,
-};
+use std::{fmt::Display, marker::PhantomData};
 
 use qubit_function::{
-    ArcRunnable,
-    ArcTester,
-    Callable,
-    CallableWith,
-    Runnable,
-    RunnableWith,
-    Tester,
+    ArcRunnable, ArcTester, Callable, CallableWith, Runnable, RunnableWith, Tester,
 };
 
 use super::{
-    ExecutionContext,
-    ExecutionLogger,
-    ExecutionResult,
-    executor_builder::ExecutorBuilder,
+    ExecutionContext, ExecutionLogger, ExecutionResult, executor_builder::ExecutorBuilder,
     executor_ready_builder::ExecutorReadyBuilder,
 };
-use crate::{
-    lock::Lock,
-    task::executor::Executor,
-};
+use crate::{lock::Lock, task::executor::Executor};
 
 /// Reusable double-checked lock executor.
 ///
@@ -69,43 +54,45 @@ use crate::{
 /// [`ExecutorLockBuilder::when`], then call [`Self::call`], [`Self::execute`],
 /// [`Self::call_with`], or [`Self::execute_with`] on the built executor.
 ///
-/// ```
+/// ```rust
 /// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 ///
 /// use qubit_concurrent::{ArcMutex, DoubleCheckedLockExecutor, Lock};
 /// use qubit_concurrent::double_checked::ExecutionResult;
 ///
-/// let data = ArcMutex::new(10);
-/// let skip = Arc::new(AtomicBool::new(false));
+/// fn main() {
+///     let data = ArcMutex::new(10);
+///     let skip = Arc::new(AtomicBool::new(false));
 ///
-/// let executor = DoubleCheckedLockExecutor::builder()
-///     .on(data.clone())
-///     .when({
-///         let skip = skip.clone();
-///         move || !skip.load(Ordering::Acquire)
-///     })
-///     .build();
+///     let executor = DoubleCheckedLockExecutor::builder()
+///         .on(data.clone())
+///         .when({
+///             let skip = skip.clone();
+///             move || !skip.load(Ordering::Acquire)
+///         })
+///         .build();
 ///
-/// let updated = executor
-///     .call_with(|value: &mut i32| {
-///         *value += 5;
-///         Ok::<i32, std::io::Error>(*value)
-///     })
-///     .get_result();
+///     let updated = executor
+///         .call_with(|value: &mut i32| {
+///             *value += 5;
+///             Ok::<i32, std::io::Error>(*value)
+///         })
+///         .get_result();
 ///
-/// assert!(matches!(updated, ExecutionResult::Success(15)));
-/// assert_eq!(data.read(|value| *value), 15);
+///     assert!(matches!(updated, ExecutionResult::Success(15)));
+///     assert_eq!(data.read(|value| *value), 15);
 ///
-/// skip.store(true, Ordering::Release);
-/// let skipped = executor
-///     .call_with(|value: &mut i32| {
-///         *value += 1;
-///         Ok::<i32, std::io::Error>(*value)
-///     })
-///     .get_result();
+///     skip.store(true, Ordering::Release);
+///     let skipped = executor
+///         .call_with(|value: &mut i32| {
+///             *value += 1;
+///             Ok::<i32, std::io::Error>(*value)
+///         })
+///         .get_result();
 ///
-/// assert!(matches!(skipped, ExecutionResult::ConditionNotMet));
-/// assert_eq!(data.read(|value| *value), 15);
+///     assert!(matches!(skipped, ExecutionResult::ConditionNotMet));
+///     assert_eq!(data.read(|value| *value), 15);
+/// }
 /// ```
 ///
 /// # Author

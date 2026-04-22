@@ -8,10 +8,7 @@
  ******************************************************************************/
 #[cfg(test)]
 mod tests {
-    use qubit_concurrent::double_checked::{
-        ExecutionLogger,
-        ExecutorConfig,
-    };
+    use qubit_concurrent::double_checked::{ExecutionLogger, ExecutorConfig};
 
     mod test_execution_logger {
         use super::*;

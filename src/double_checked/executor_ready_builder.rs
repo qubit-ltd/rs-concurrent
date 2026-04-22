@@ -13,21 +13,11 @@
 //!
 //! Haixing Hu
 
-use std::{
-    fmt::Display,
-    marker::PhantomData,
-};
+use std::{fmt::Display, marker::PhantomData};
 
-use qubit_function::{
-    ArcRunnable,
-    ArcTester,
-    Runnable,
-};
+use qubit_function::{ArcRunnable, ArcTester, Runnable};
 
-use super::{
-    ExecutionLogger,
-    double_checked_lock_executor::DoubleCheckedLockExecutor,
-};
+use super::{ExecutionLogger, double_checked_lock_executor::DoubleCheckedLockExecutor};
 use crate::lock::Lock;
 
 /// Builder state after the required condition tester has been configured.

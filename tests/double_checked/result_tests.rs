@@ -8,10 +8,7 @@
  ******************************************************************************/
 #[cfg(test)]
 mod tests {
-    use qubit_concurrent::double_checked::{
-        ExecutionResult,
-        ExecutorError,
-    };
+    use qubit_concurrent::double_checked::{ExecutionResult, ExecutorError};
 
     mod test_execution_result {
         use super::*;

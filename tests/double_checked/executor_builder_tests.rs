@@ -8,11 +8,7 @@
  ******************************************************************************/
 #[cfg(test)]
 mod tests {
-    use qubit_concurrent::{
-        ArcMutex,
-        DoubleCheckedLockExecutor,
-        double_checked::ExecutionResult,
-    };
+    use qubit_concurrent::{ArcMutex, DoubleCheckedLockExecutor, double_checked::ExecutionResult};
 
     mod test_executor_builder {
         use super::*;

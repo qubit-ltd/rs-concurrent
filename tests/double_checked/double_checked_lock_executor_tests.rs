@@ -12,21 +12,13 @@ mod tests {
         io,
         sync::{
             Arc,
-            atomic::{
-                AtomicBool,
-                AtomicUsize,
-                Ordering,
-            },
+            atomic::{AtomicBool, AtomicUsize, Ordering},
         },
     };
 
     use qubit_concurrent::{
-        ArcMutex,
-        DoubleCheckedLockExecutor,
-        double_checked::{
-            ExecutionContext,
-            ExecutionResult,
-        },
+        ArcMutex, DoubleCheckedLockExecutor,
+        double_checked::{ExecutionContext, ExecutionResult},
         lock::Lock,
         task::executor::Executor,
     };
