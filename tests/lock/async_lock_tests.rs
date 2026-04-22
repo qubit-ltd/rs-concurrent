@@ -10,16 +10,9 @@
 //!
 //! Tests for the AsyncLock trait and its implementations for tokio::sync::Mutex and tokio::sync::RwLock
 
-use tokio::sync::{
-    Mutex as AsyncMutex,
-    RwLock as AsyncRwLock,
-};
+use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 
-use qubit_concurrent::lock::{
-    ArcAsyncMutex,
-    ArcAsyncRwLock,
-    AsyncLock,
-};
+use qubit_concurrent::lock::{ArcAsyncMutex, ArcAsyncRwLock, AsyncLock};
 
 fn read_i32(value: &i32) -> i32 {
     *value
@@ -84,10 +77,7 @@ mod async_lock_trait_tests {
         use std::{
             sync::{
                 Arc,
-                atomic::{
-                    AtomicBool,
-                    Ordering,
-                },
+                atomic::{AtomicBool, Ordering},
             },
             time::Duration,
         };

@@ -11,18 +11,11 @@
 //! Tests for the ArcMutex implementation
 
 use std::{
-    sync::{
-        Arc,
-        Barrier,
-    },
+    sync::{Arc, Barrier},
     thread,
 };
 
-use qubit_concurrent::{
-    ArcMutex,
-    Lock,
-    TryLockError,
-};
+use qubit_concurrent::{ArcMutex, Lock, TryLockError};
 
 #[cfg(test)]
 #[allow(clippy::module_inception)]

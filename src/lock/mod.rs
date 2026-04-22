@@ -24,6 +24,7 @@
 mod async_lock;
 mod lock;
 mod monitor;
+mod monitor_guard;
 mod try_lock_error;
 
 // Implementations
@@ -44,5 +45,6 @@ pub use arc_rw_lock::ArcRwLock;
 pub use arc_std_mutex::ArcStdMutex;
 pub use async_lock::AsyncLock;
 pub use lock::Lock;
-pub use monitor::Monitor;
+pub use monitor::{Monitor, WaitTimeoutResult, WaitTimeoutStatus};
+pub use monitor_guard::MonitorGuard;
 pub use try_lock_error::TryLockError;

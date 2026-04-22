@@ -16,10 +16,7 @@
 //! # Author
 //!
 //! Haixing Hu
-use std::sync::{
-    Mutex,
-    RwLock,
-};
+use std::sync::{Mutex, RwLock};
 
 use parking_lot::Mutex as ParkingLotMutex;
 

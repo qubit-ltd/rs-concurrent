@@ -11,18 +11,12 @@
 //! Tests for the parking_lot::Mutex implementation of the Lock trait
 
 use std::{
-    sync::{
-        Arc,
-        Barrier,
-    },
+    sync::{Arc, Barrier},
     thread,
 };
 
 use parking_lot::Mutex as ParkingLotMutex;
-use qubit_concurrent::lock::{
-    Lock,
-    TryLockError,
-};
+use qubit_concurrent::lock::{Lock, TryLockError};
 
 #[cfg(test)]
 #[allow(clippy::module_inception)]

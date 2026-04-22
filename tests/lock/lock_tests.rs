@@ -11,24 +11,13 @@
 //! Tests for the Lock trait and its implementations for std::sync::Mutex and std::sync::RwLock
 
 use std::{
-    sync::{
-        Arc,
-        Barrier,
-    },
+    sync::{Arc, Barrier},
     thread,
 };
 
-use std::sync::{
-    Mutex,
-    RwLock,
-};
+use std::sync::{Mutex, RwLock};
 
-use qubit_concurrent::lock::{
-    ArcRwLock,
-    ArcStdMutex,
-    Lock,
-    TryLockError,
-};
+use qubit_concurrent::lock::{ArcRwLock, ArcStdMutex, Lock, TryLockError};
 
 fn read_i32(value: &i32) -> i32 {
     *value

@@ -9,15 +9,12 @@
 //! Tests for [`Monitor`](qubit_concurrent::lock::Monitor).
 
 use std::{
-    sync::{
-        Arc,
-        mpsc,
-    },
+    sync::{Arc, mpsc},
     thread,
     time::Duration,
 };
 
-use qubit_concurrent::lock::Monitor;
+use qubit_concurrent::lock::{Monitor, WaitTimeoutResult, WaitTimeoutStatus};
 
 #[test]
 fn test_monitor_new_read_write_updates_state() {
@@ -51,6 +48,22 @@ fn test_monitor_wait_until_returns_when_predicate_is_ready() {
 
     assert_eq!(result, 4);
     assert_eq!(monitor.read(|value| *value), 4);
+}
+
+#[test]
+fn test_monitor_wait_while_returns_when_predicate_is_false() {
+    let monitor = Monitor::new(vec![1, 2, 3]);
+
+    let result = monitor.wait_while(
+        |items| items.is_empty(),
+        |items| {
+            items.push(4);
+            items.len()
+        },
+    );
+
+    assert_eq!(result, 4);
+    assert_eq!(monitor.read(|items| items.clone()), vec![1, 2, 3, 4]);
 }
 
 #[test]
@@ -91,6 +104,108 @@ fn test_monitor_wait_until_blocks_until_notify_one() {
             .recv_timeout(Duration::from_secs(1))
             .expect("waiter should finish after notification"),
         42,
+    );
+    waiter.join().expect("waiter should not panic");
+    assert!(!monitor.read(|ready| *ready));
+}
+
+#[test]
+fn test_monitor_wait_notify_returns_timed_out() {
+    let monitor = Monitor::new(false);
+
+    let status = monitor.wait_notify(Duration::from_millis(30));
+
+    assert_eq!(status, WaitTimeoutStatus::TimedOut);
+}
+
+#[test]
+fn test_monitor_wait_notify_returns_woken_when_notified() {
+    let monitor = Arc::new(Monitor::new(false));
+    let (started_tx, started_rx) = mpsc::channel();
+    let (done_tx, done_rx) = mpsc::channel();
+
+    let waiter_monitor = Arc::clone(&monitor);
+    let waiter = thread::spawn(move || {
+        started_tx
+            .send(())
+            .expect("test should observe waiter start");
+        let notified = waiter_monitor.wait_notify(Duration::from_secs(1));
+        done_tx
+            .send(notified)
+            .expect("test should receive waiter result");
+    });
+
+    started_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("waiter should start within timeout");
+    thread::sleep(Duration::from_millis(30));
+
+    monitor.notify_one();
+
+    assert_eq!(
+        done_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("waiter should finish after notify"),
+        WaitTimeoutStatus::Woken,
+    );
+    waiter.join().expect("waiter should not panic");
+}
+
+#[test]
+fn test_monitor_wait_timeout_while_returns_timed_out_when_timeout() {
+    let monitor = Monitor::new(false);
+
+    let result = monitor.wait_timeout_while(Duration::from_millis(20), |ready| !*ready, |_| ());
+
+    assert_eq!(result, WaitTimeoutResult::TimedOut);
+}
+
+#[test]
+fn test_monitor_wait_timeout_until_returns_timed_out_when_timeout() {
+    let monitor = Monitor::new(false);
+
+    let result = monitor.wait_timeout_until(Duration::from_millis(20), |ready| *ready, |_| ());
+
+    assert_eq!(result, WaitTimeoutResult::TimedOut);
+}
+
+#[test]
+fn test_monitor_wait_timeout_until_returns_result_when_predicate_true() {
+    let monitor = Arc::new(Monitor::new(false));
+    let (started_tx, started_rx) = mpsc::channel();
+    let (done_tx, done_rx) = mpsc::channel();
+
+    let waiter_monitor = Arc::clone(&monitor);
+    let waiter = thread::spawn(move || {
+        started_tx
+            .send(())
+            .expect("test should observe waiter start");
+        let result = waiter_monitor.wait_timeout_until(
+            Duration::from_secs(1),
+            |ready| *ready,
+            |ready| {
+                *ready = false;
+                7
+            },
+        );
+        done_tx
+            .send(result)
+            .expect("test should receive waiter result");
+    });
+
+    started_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("waiter should start within timeout");
+    monitor.write(|ready| {
+        *ready = true;
+    });
+    monitor.notify_one();
+
+    assert_eq!(
+        done_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("waiter should finish after notification"),
+        WaitTimeoutResult::Ready(7),
     );
     waiter.join().expect("waiter should not panic");
     assert!(!monitor.read(|ready| *ready));

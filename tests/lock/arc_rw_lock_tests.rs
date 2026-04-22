@@ -10,16 +10,9 @@
 //!
 //! Tests for the ArcRwLock implementation
 
-use std::{
-    sync::Arc,
-    thread,
-};
+use std::{sync::Arc, thread};
 
-use qubit_concurrent::{
-    ArcRwLock,
-    Lock,
-    TryLockError,
-};
+use qubit_concurrent::{ArcRwLock, Lock, TryLockError};
 
 #[cfg(test)]
 #[allow(clippy::module_inception)]

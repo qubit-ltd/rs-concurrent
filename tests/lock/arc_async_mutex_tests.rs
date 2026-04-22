@@ -12,10 +12,7 @@
 
 use std::sync::Arc;
 
-use qubit_concurrent::{
-    ArcAsyncMutex,
-    AsyncLock,
-};
+use qubit_concurrent::{ArcAsyncMutex, AsyncLock};
 
 #[cfg(test)]
 #[allow(clippy::module_inception)]
