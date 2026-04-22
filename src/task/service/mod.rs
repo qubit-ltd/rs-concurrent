@@ -29,11 +29,7 @@ pub use rejected_execution::RejectedExecution;
 pub use shutdown_report::ShutdownReport;
 pub use thread_per_task_executor_service::ThreadPerTaskExecutorService;
 pub use thread_pool::{
-    PoolJob,
-    ThreadPool,
-    ThreadPoolBuildError,
-    ThreadPoolBuilder,
-    ThreadPoolStats,
+    PoolJob, ThreadPool, ThreadPoolBuildError, ThreadPoolBuilder, ThreadPoolStats,
 };
 pub use tokio_executor_service::TokioExecutorService;
 pub use tokio_task_handle::TokioTaskHandle;
