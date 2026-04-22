@@ -71,6 +71,7 @@ use crate::lock::{
 /// Haixing Hu
 ///
 pub struct ArcRwLock<T> {
+    /// Shared standard read-write lock protecting the wrapped value.
     inner: Arc<RwLock<T>>,
 }
 
@@ -117,6 +118,10 @@ impl<T> Lock<T> for ArcRwLock<T> {
     ///
     /// Returns the result of executing the closure
     ///
+    /// # Panics
+    ///
+    /// Panics if the underlying standard read-write lock is poisoned.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -151,6 +156,10 @@ impl<T> Lock<T> for ArcRwLock<T> {
     /// # Returns
     ///
     /// Returns the result of executing the closure
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying standard read-write lock is poisoned.
     ///
     /// # Example
     ///
@@ -264,6 +273,11 @@ impl<T> Clone for ArcRwLock<T> {
     /// underlying lock with the original instance. This allows
     /// multiple threads to hold references to the same lock
     /// simultaneously.
+    ///
+    /// # Returns
+    ///
+    /// A new handle sharing the same underlying read-write lock and protected
+    /// value.
     #[inline]
     fn clone(&self) -> Self {
         Self {

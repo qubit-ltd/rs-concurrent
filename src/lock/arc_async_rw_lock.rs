@@ -73,6 +73,7 @@ use crate::lock::AsyncLock;
 /// Haixing Hu
 ///
 pub struct ArcAsyncRwLock<T> {
+    /// Shared Tokio read-write lock protecting the wrapped value.
     inner: Arc<AsyncRwLock<T>>,
 }
 
@@ -193,6 +194,17 @@ where
         f(&mut *guard)
     }
 
+    /// Attempts to acquire the read lock without waiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access when a read lock is
+    ///   available.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if a read lock was acquired, or `None` if the lock was
+    /// busy.
     #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
@@ -205,6 +217,16 @@ where
         }
     }
 
+    /// Attempts to acquire the write lock without waiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access when a write lock is available.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if a write lock was acquired, or `None` if the lock was
+    /// busy.
     #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
@@ -225,6 +247,11 @@ impl<T> Clone for ArcAsyncRwLock<T> {
     /// underlying lock with the original instance. This allows
     /// multiple tasks to hold references to the same lock
     /// simultaneously.
+    ///
+    /// # Returns
+    ///
+    /// A new handle sharing the same underlying async read-write lock and
+    /// protected value.
     #[inline]
     fn clone(&self) -> Self {
         Self {

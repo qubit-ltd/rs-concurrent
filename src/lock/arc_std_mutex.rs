@@ -65,6 +65,7 @@ use crate::lock::{
 /// Haixing Hu
 ///
 pub struct ArcStdMutex<T> {
+    /// Shared standard mutex protecting the wrapped value.
     inner: Arc<Mutex<T>>,
 }
 
@@ -109,6 +110,10 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     ///
     /// Returns the result of executing the closure
     ///
+    /// # Panics
+    ///
+    /// Panics if the underlying standard mutex is poisoned.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -141,6 +146,10 @@ impl<T> Lock<T> for ArcStdMutex<T> {
     /// # Returns
     ///
     /// Returns the result of executing the closure
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying standard mutex is poisoned.
     ///
     /// # Example
     ///
@@ -256,6 +265,10 @@ impl<T> Clone for ArcStdMutex<T> {
     /// underlying lock with the original instance. This allows
     /// multiple threads to hold references to the same lock
     /// simultaneously.
+    ///
+    /// # Returns
+    ///
+    /// A new handle sharing the same underlying mutex and protected value.
     #[inline]
     fn clone(&self) -> Self {
         Self {

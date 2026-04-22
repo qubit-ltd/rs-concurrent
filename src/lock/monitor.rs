@@ -70,7 +70,9 @@ use std::sync::{
 ///
 /// Haixing Hu
 pub struct Monitor<T> {
+    /// Mutex protecting the monitor state.
     state: Mutex<T>,
+    /// Condition variable used to wake predicate waiters after state changes.
     changed: Condvar,
 }
 
@@ -298,6 +300,11 @@ impl<T> Monitor<T> {
     }
 
     /// Acquires the state mutex and recovers from poisoning.
+    ///
+    /// # Returns
+    ///
+    /// A mutex guard protecting the monitor state. If the mutex is poisoned,
+    /// the guard contains the recovered inner state.
     fn lock_state(&self) -> MutexGuard<'_, T> {
         self.state
             .lock()
@@ -305,6 +312,14 @@ impl<T> Monitor<T> {
     }
 
     /// Waits on the condition variable and recovers from poisoning.
+    ///
+    /// # Arguments
+    ///
+    /// * `guard` - Current state guard to release while waiting.
+    ///
+    /// # Returns
+    ///
+    /// The reacquired state guard after notification or a spurious wakeup.
     fn wait_state<'a>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
         self.changed
             .wait(guard)
@@ -314,6 +329,10 @@ impl<T> Monitor<T> {
 
 impl<T: Default> Default for Monitor<T> {
     /// Creates a monitor containing `T::default()`.
+    ///
+    /// # Returns
+    ///
+    /// A monitor protecting the default value for `T`.
     ///
     /// # Example
     ///

@@ -202,6 +202,12 @@ pub trait Lock<T: ?Sized> {
     /// * `Err(TryLockError::WouldBlock)` - If the lock is currently held in write mode
     /// * `Err(TryLockError::Poisoned)` - If the lock is poisoned
     ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the lock cannot be acquired
+    /// immediately. Returns [`TryLockError::Poisoned`] for standard-library
+    /// locks that were poisoned by a panic.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -234,6 +240,12 @@ pub trait Lock<T: ?Sized> {
     /// * `Ok(R)` - If the lock was acquired and closure executed
     /// * `Err(TryLockError::WouldBlock)` - If the lock is currently held by another thread
     /// * `Err(TryLockError::Poisoned)` - If the lock is poisoned
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the lock cannot be acquired
+    /// immediately. Returns [`TryLockError::Poisoned`] for standard-library
+    /// locks that were poisoned by a panic.
     ///
     /// # Example
     ///
@@ -269,6 +281,19 @@ pub trait Lock<T: ?Sized> {
 ///
 /// Haixing Hu
 impl<T: ?Sized> Lock<T> for Mutex<T> {
+    /// Acquires the mutex and executes a read-only closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// The value returned by `f`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned.
     #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
@@ -278,6 +303,19 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
         f(&*guard)
     }
 
+    /// Acquires the mutex and executes a mutable closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// The value returned by `f`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned.
     #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
@@ -287,6 +325,20 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
         f(&mut *guard)
     }
 
+    /// Attempts to acquire the mutex without blocking for a read-only closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access when the mutex is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(result)` if the mutex is acquired.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the mutex is held by another
+    /// thread, or [`TryLockError::Poisoned`] when the mutex is poisoned.
     #[inline]
     fn try_read<R, F>(&self, f: F) -> Result<R, TryLockError>
     where
@@ -299,6 +351,20 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
         }
     }
 
+    /// Attempts to acquire the mutex without blocking for a mutable closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access when the mutex is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(result)` if the mutex is acquired.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the mutex is held by another
+    /// thread, or [`TryLockError::Poisoned`] when the mutex is poisoned.
     #[inline]
     fn try_write<R, F>(&self, f: F) -> Result<R, TryLockError>
     where
@@ -327,6 +393,19 @@ impl<T: ?Sized> Lock<T> for Mutex<T> {
 ///
 /// Haixing Hu
 impl<T: ?Sized> Lock<T> for RwLock<T> {
+    /// Acquires a shared read lock and executes a closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// The value returned by `f`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the read-write lock is poisoned.
     #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
@@ -336,6 +415,19 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
         f(&*guard)
     }
 
+    /// Acquires an exclusive write lock and executes a closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// The value returned by `f`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the read-write lock is poisoned.
     #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
@@ -345,6 +437,20 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
         f(&mut *guard)
     }
 
+    /// Attempts to acquire a shared read lock without blocking.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access when a read lock is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(result)` if a read lock is acquired.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the lock is unavailable, or
+    /// [`TryLockError::Poisoned`] when the lock is poisoned.
     #[inline]
     fn try_read<R, F>(&self, f: F) -> Result<R, TryLockError>
     where
@@ -357,6 +463,20 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
         }
     }
 
+    /// Attempts to acquire an exclusive write lock without blocking.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access when a write lock is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(result)` if a write lock is acquired.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the lock is unavailable, or
+    /// [`TryLockError::Poisoned`] when the lock is poisoned.
     #[inline]
     fn try_write<R, F>(&self, f: F) -> Result<R, TryLockError>
     where
@@ -393,6 +513,15 @@ impl<T: ?Sized> Lock<T> for RwLock<T> {
 ///
 /// Haixing Hu
 impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
+    /// Acquires the parking_lot mutex and executes a read-only closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// The value returned by `f`.
     #[inline]
     fn read<R, F>(&self, f: F) -> R
     where
@@ -402,6 +531,15 @@ impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
         f(&*guard)
     }
 
+    /// Acquires the parking_lot mutex and executes a mutable closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// The value returned by `f`.
     #[inline]
     fn write<R, F>(&self, f: F) -> R
     where
@@ -411,6 +549,20 @@ impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
         f(&mut *guard)
     }
 
+    /// Attempts to acquire the parking_lot mutex without blocking for reading.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access when the mutex is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(result)` if the mutex is acquired.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the mutex is held by another
+    /// thread. parking_lot mutexes are not poisoned.
     #[inline]
     fn try_read<R, F>(&self, f: F) -> Result<R, TryLockError>
     where
@@ -421,6 +573,20 @@ impl<T: ?Sized> Lock<T> for ParkingLotMutex<T> {
             .ok_or(TryLockError::WouldBlock)
     }
 
+    /// Attempts to acquire the parking_lot mutex without blocking for writing.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access when the mutex is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(result)` if the mutex is acquired.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryLockError::WouldBlock`] when the mutex is held by another
+    /// thread. parking_lot mutexes are not poisoned.
     #[inline]
     fn try_write<R, F>(&self, f: F) -> Result<R, TryLockError>
     where

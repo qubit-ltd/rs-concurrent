@@ -67,6 +67,7 @@ use crate::lock::{
 /// Haixing Hu
 ///
 pub struct ArcMutex<T> {
+    /// Shared parking_lot mutex protecting the wrapped value.
     inner: Arc<Mutex<T>>,
 }
 
@@ -254,6 +255,10 @@ impl<T> Clone for ArcMutex<T> {
     /// underlying lock with the original instance. This allows
     /// multiple threads to hold references to the same lock
     /// simultaneously.
+    ///
+    /// # Returns
+    ///
+    /// A new handle sharing the same underlying mutex and protected value.
     #[inline]
     fn clone(&self) -> Self {
         Self {

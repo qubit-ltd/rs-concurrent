@@ -67,6 +67,7 @@ use crate::lock::AsyncLock;
 /// Haixing Hu
 ///
 pub struct ArcAsyncMutex<T> {
+    /// Shared Tokio mutex protecting the wrapped value.
     inner: Arc<AsyncMutex<T>>,
 }
 
@@ -100,42 +101,15 @@ impl<T> AsyncLock<T> for ArcAsyncMutex<T>
 where
     T: Send,
 {
-    /// Acquires the lock and executes an operation
-    ///
-    /// Asynchronously acquires the lock, executes the provided
-    /// closure, and then automatically releases the lock. This is
-    /// the recommended usage pattern as it ensures proper lock
-    /// release.
+    /// Acquires the mutex and executes a read-only operation.
     ///
     /// # Arguments
     ///
-    /// * `f` - The closure to be executed while holding the lock
+    /// * `f` - Closure receiving immutable access to the protected value.
     ///
     /// # Returns
     ///
-    /// Returns a future that resolves to the result of executing
-    /// the closure
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use qubit_concurrent::lock::{ArcAsyncMutex, AsyncLock};
-    ///
-    /// let rt = tokio::runtime::Builder::new_current_thread()
-    ///     .enable_all()
-    ///     .build()
-    ///     .unwrap();
-    /// rt.block_on(async {
-    ///     let counter = ArcAsyncMutex::new(0);
-    ///
-    ///     let result = counter.write(|c| {
-    ///         *c += 1;
-    ///         *c
-    ///     }).await;
-    ///
-    ///     println!("Counter value: {}", result);
-    /// });
-    /// ```
+    /// A future resolving to the closure result.
     #[inline]
     async fn read<R, F>(&self, f: F) -> R
     where
@@ -146,6 +120,15 @@ where
         f(&*guard)
     }
 
+    /// Acquires the mutex and executes a mutable operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// A future resolving to the closure result.
     #[inline]
     async fn write<R, F>(&self, f: F) -> R
     where
@@ -156,6 +139,15 @@ where
         f(&mut *guard)
     }
 
+    /// Attempts to acquire the mutex for a read-only operation without waiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access when the mutex is available.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if the mutex was acquired, or `None` if it was busy.
     #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
@@ -168,6 +160,15 @@ where
         }
     }
 
+    /// Attempts to acquire the mutex for a mutable operation without waiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access when the mutex is available.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if the mutex was acquired, or `None` if it was busy.
     #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
@@ -188,6 +189,11 @@ impl<T> Clone for ArcAsyncMutex<T> {
     /// underlying lock with the original instance. This allows
     /// multiple tasks to hold references to the same lock
     /// simultaneously.
+    ///
+    /// # Returns
+    ///
+    /// A new handle sharing the same underlying async mutex and protected
+    /// value.
     #[inline]
     fn clone(&self) -> Self {
         Self {

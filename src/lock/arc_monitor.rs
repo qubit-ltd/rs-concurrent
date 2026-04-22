@@ -167,6 +167,10 @@ impl<T> ArcMonitor<T> {
 
 impl<T: Default> Default for ArcMonitor<T> {
     /// Creates an Arc-wrapped monitor containing `T::default()`.
+    ///
+    /// # Returns
+    ///
+    /// A cloneable monitor handle protecting the default value for `T`.
     #[inline]
     fn default() -> Self {
         Self::new(T::default())
@@ -178,6 +182,10 @@ impl<T> Clone for ArcMonitor<T> {
     ///
     /// The cloned handle shares the same protected state and condition
     /// variable with the original.
+    ///
+    /// # Returns
+    ///
+    /// A new handle sharing the same monitor state.
     #[inline]
     fn clone(&self) -> Self {
         Self {

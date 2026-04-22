@@ -278,6 +278,15 @@ pub trait AsyncLock<T: ?Sized> {
 ///
 /// Haixing Hu
 impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
+    /// Acquires the mutex and executes a read-only closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// A future resolving to the value returned by `f`.
     #[inline]
     async fn read<R, F>(&self, f: F) -> R
     where
@@ -288,6 +297,15 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
         f(&*guard)
     }
 
+    /// Acquires the mutex and executes a mutable closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// A future resolving to the value returned by `f`.
     #[inline]
     async fn write<R, F>(&self, f: F) -> R
     where
@@ -298,6 +316,15 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
         f(&mut *guard)
     }
 
+    /// Attempts to acquire the mutex without waiting for a read-only closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access when the mutex is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if the mutex is acquired, or `None` if it is busy.
     #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
@@ -310,6 +337,15 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
         }
     }
 
+    /// Attempts to acquire the mutex without waiting for a mutable closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access when the mutex is acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if the mutex is acquired, or `None` if it is busy.
     #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
@@ -339,6 +375,15 @@ impl<T: ?Sized + Send> AsyncLock<T> for AsyncMutex<T> {
 ///
 /// Haixing Hu
 impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
+    /// Acquires a shared read lock and executes a closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// A future resolving to the value returned by `f`.
     #[inline]
     async fn read<R, F>(&self, f: F) -> R
     where
@@ -349,6 +394,15 @@ impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
         f(&*guard)
     }
 
+    /// Acquires an exclusive write lock and executes a closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access to the protected value.
+    ///
+    /// # Returns
+    ///
+    /// A future resolving to the value returned by `f`.
     #[inline]
     async fn write<R, F>(&self, f: F) -> R
     where
@@ -359,6 +413,16 @@ impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
         f(&mut *guard)
     }
 
+    /// Attempts to acquire a shared read lock without waiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving immutable access when the read lock is
+    ///   acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if a read lock is acquired, or `None` if it is busy.
     #[inline]
     fn try_read<R, F>(&self, f: F) -> Option<R>
     where
@@ -371,6 +435,16 @@ impl<T: ?Sized + Send + Sync> AsyncLock<T> for AsyncRwLock<T> {
         }
     }
 
+    /// Attempts to acquire an exclusive write lock without waiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure receiving mutable access when the write lock is
+    ///   acquired.
+    ///
+    /// # Returns
+    ///
+    /// `Some(result)` if a write lock is acquired, or `None` if it is busy.
     #[inline]
     fn try_write<R, F>(&self, f: F) -> Option<R>
     where
