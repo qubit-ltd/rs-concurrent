@@ -7,7 +7,6 @@
  *
  ******************************************************************************/
 use std::{
-    collections::VecDeque,
     sync::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -15,6 +14,8 @@ use std::{
     thread,
     time::Duration,
 };
+
+use crossbeam_deque::{Injector, Steal};
 
 use crate::lock::{Monitor, MonitorGuard, WaitTimeoutStatus};
 
@@ -30,8 +31,8 @@ use super::thread_pool_stats::ThreadPoolStats;
 struct WorkerQueue {
     /// Logical worker index used as a stable identity key.
     worker_index: usize,
-    /// FIFO of queued jobs assigned to this worker.
-    jobs: Mutex<VecDeque<PoolJob>>,
+    /// Lock-free deque of queued jobs assigned to this worker.
+    jobs: Injector<PoolJob>,
 }
 
 impl WorkerQueue {
@@ -47,7 +48,7 @@ impl WorkerQueue {
     fn new(worker_index: usize) -> Self {
         Self {
             worker_index,
-            jobs: Mutex::new(VecDeque::new()),
+            jobs: Injector::new(),
         }
     }
 
@@ -67,10 +68,7 @@ impl WorkerQueue {
     ///
     /// * `job` - Job to enqueue.
     fn push_back(&self, job: PoolJob) {
-        self.jobs
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push_back(job);
+        self.jobs.push(job);
     }
 
     /// Pops one job from the front of this queue.
@@ -78,11 +76,13 @@ impl WorkerQueue {
     /// # Returns
     ///
     /// `Some(job)` when this queue is non-empty, otherwise `None`.
+    ///
+    /// # Implementation notes
+    ///
+    /// [`Injector`] does not expose an owner-only pop operation. Both "local
+    /// pop" and "remote steal" therefore share the same `steal()` primitive.
     fn pop_front(&self) -> Option<PoolJob> {
-        self.jobs
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .pop_front()
+        self.steal_one()
     }
 
     /// Steals one job from the back of this queue.
@@ -90,11 +90,13 @@ impl WorkerQueue {
     /// # Returns
     ///
     /// `Some(job)` when this queue is non-empty, otherwise `None`.
+    ///
+    /// # Implementation notes
+    ///
+    /// This method intentionally reuses [`Self::steal_one`] so all queue
+    /// consumers handle transient `Steal::Retry` states consistently.
     fn steal_back(&self) -> Option<PoolJob> {
-        self.jobs
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .pop_back()
+        self.steal_one()
     }
 
     /// Drains all queued jobs from this queue.
@@ -103,11 +105,29 @@ impl WorkerQueue {
     ///
     /// A vector containing all queued jobs in FIFO order.
     fn drain(&self) -> Vec<PoolJob> {
-        self.jobs
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .drain(..)
-            .collect()
+        let mut jobs = Vec::new();
+        while let Some(job) = self.steal_one() {
+            jobs.push(job);
+        }
+        jobs
+    }
+
+    /// Steals one job from this queue and transparently retries transient
+    /// contention states.
+    ///
+    /// # Returns
+    ///
+    /// `Some(job)` when a job is available, otherwise `None`.
+    fn steal_one(&self) -> Option<PoolJob> {
+        loop {
+            match self.jobs.steal() {
+                Steal::Success(job) => return Some(job),
+                Steal::Empty => return None,
+                // Another thread raced us while mutating queue internals.
+                // Retry immediately to mask this transient state from callers.
+                Steal::Retry => continue,
+            }
+        }
     }
 }
 
@@ -243,8 +263,9 @@ impl ThreadPoolInner {
             // their current task, so a broadcast wake-up is unnecessary.
             let should_wake_one_idle_worker = state.idle_workers > 0;
             // Keep unbounded-queue pools on the legacy global-queue fast path.
-            // For bounded pools under sustained load, local queues can reduce
-            // contention on the shared global queue.
+            // For bounded pools under sustained load and without idle workers,
+            // local queues can reduce submit-path contention on the shared
+            // global queue.
             let use_local_queue =
                 state.queue_capacity.is_some() && state.idle_workers == 0 && state.live_workers > 0;
             if !use_local_queue {
@@ -300,6 +321,12 @@ impl ThreadPoolInner {
     /// # Returns
     ///
     /// `true` when a worker-local queue accepted the job, otherwise `false`.
+    ///
+    /// # Overall logic
+    ///
+    /// The submit path keeps this operation O(1): choose exactly one local
+    /// queue with a round-robin cursor and push once, then fallback to the
+    /// global queue when local enqueue is unavailable.
     fn try_enqueue_worker_job_locked(&self, job: &mut Option<PoolJob>) -> bool {
         let queues = self
             .worker_queues
@@ -463,8 +490,8 @@ impl ThreadPoolInner {
     /// The lookup order favors locality first and balance second:
     ///
     /// 1. Pop from the worker's own local queue.
-    /// 2. Pop from the global fallback queue.
-    /// 3. Steal from other workers' local queues.
+    /// 2. Steal from other workers' local queues (bounded pools only).
+    /// 3. Pop from the global fallback queue.
     ///
     /// This method mutates queue-related counters only after a job is
     /// successfully claimed.
@@ -534,6 +561,8 @@ impl ThreadPoolInner {
         if queue_count <= 1 {
             return None;
         }
+        // Rotate victim probing start index to avoid repeatedly hammering the
+        // same queue under contention.
         let start = self.next_enqueue_worker.fetch_add(1, Ordering::Relaxed) % queue_count;
         for offset in 0..queue_count {
             let victim = &queues[(start + offset) % queue_count];

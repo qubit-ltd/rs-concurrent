@@ -39,6 +39,8 @@ thiserror = "2.0"
 log = "0.4"
 # High-performance synchronization primitives
 parking_lot = "0.12"
+# Work-stealing deque primitives
+crossbeam-deque = "0.8"
 # Functional programming utilities
 qubit-function = "0.10"
 
