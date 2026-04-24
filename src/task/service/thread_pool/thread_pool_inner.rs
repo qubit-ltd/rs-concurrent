@@ -16,7 +16,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_deque::{Injector, Steal};
+use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use parking_lot::{Mutex, RwLock};
 
 use crate::lock::{Monitor, MonitorGuard, WaitTimeoutStatus};
@@ -36,8 +36,10 @@ use super::thread_pool_stats::ThreadPoolStats;
 struct WorkerQueue {
     /// Logical worker index used as a stable identity key.
     worker_index: usize,
-    /// Lock-free deque of queued jobs assigned to this worker.
-    jobs: Injector<PoolJob>,
+    /// Cross-thread inbox used by submitters to route work to this worker.
+    inbox: Injector<PoolJob>,
+    /// Stealer half of the worker-owned local deque.
+    stealer: Stealer<PoolJob>,
     /// Whether this queue belongs to a worker that has reached run-loop start.
     ///
     /// Submit and steal paths ignore inactive queues so work is not routed to
@@ -46,19 +48,21 @@ struct WorkerQueue {
 }
 
 impl WorkerQueue {
-    /// Creates an empty local queue for one worker.
+    /// Creates an empty shared queue handle for one worker.
     ///
     /// # Parameters
     ///
     /// * `worker_index` - Stable index of the worker owning this queue.
+    /// * `stealer` - Read-only stealing handle for the owner-local deque.
     ///
     /// # Returns
     ///
-    /// A local queue with no jobs.
-    fn new(worker_index: usize) -> Self {
+    /// A shared queue handle with an empty cross-thread inbox.
+    fn new(worker_index: usize, stealer: Stealer<PoolJob>) -> Self {
         Self {
             worker_index,
-            jobs: Injector::new(),
+            inbox: Injector::new(),
+            stealer,
             active: AtomicBool::new(false),
         }
     }
@@ -105,41 +109,46 @@ impl WorkerQueue {
             .is_ok()
     }
 
-    /// Appends a job to the back of this queue.
+    /// Appends a job to the worker's cross-thread inbox.
     ///
     /// # Parameters
     ///
     /// * `job` - Job to enqueue.
     fn push_back(&self, job: PoolJob) {
-        self.jobs.push(job);
+        self.inbox.push(job);
     }
 
-    /// Pops one job from the front of this queue.
+    /// Pops one job from this worker's cross-thread inbox into its local deque.
     ///
     /// # Returns
     ///
-    /// `Some(job)` when this queue is non-empty, otherwise `None`.
+    /// `Some(job)` when the inbox or the destination local deque provides a
+    /// job, otherwise `None`.
     ///
     /// # Implementation notes
     ///
-    /// [`Injector`] does not expose an owner-only pop operation. Both "local
-    /// pop" and "remote steal" therefore share the same `steal()` primitive.
-    fn pop_front(&self) -> Option<PoolJob> {
-        self.steal_one()
+    /// Submitters cannot push directly into the owner-only [`Worker`] deque, so
+    /// the worker drains its shared inbox in small batches. The first job is
+    /// returned immediately and the rest remain in the owner-local deque for
+    /// cheaper subsequent pops.
+    fn pop_inbox_into(&self, local: &Worker<PoolJob>) -> Option<PoolJob> {
+        steal_batch_and_pop(&self.inbox, local)
     }
 
-    /// Steals one job from the back of this queue.
+    /// Steals one job from this worker's local deque or inbox into `dest`.
     ///
     /// # Returns
     ///
-    /// `Some(job)` when this queue is non-empty, otherwise `None`.
+    /// `Some(job)` when the victim's local deque or inbox provides a job,
+    /// otherwise `None`.
     ///
     /// # Implementation notes
     ///
-    /// This method intentionally reuses [`Self::steal_one`] so all queue
-    /// consumers handle transient `Steal::Retry` states consistently.
-    fn steal_back(&self) -> Option<PoolJob> {
-        self.steal_one()
+    /// A victim may have jobs already batched into its owner-local deque, or it
+    /// may still have externally submitted jobs in its inbox. Thieves probe both
+    /// sources and batch stolen work into their own local deque.
+    fn steal_into(&self, dest: &Worker<PoolJob>) -> Option<PoolJob> {
+        steal_batch_and_pop(&self.stealer, dest).or_else(|| steal_batch_and_pop(&self.inbox, dest))
     }
 
     /// Drains all queued jobs from this queue.
@@ -149,28 +158,130 @@ impl WorkerQueue {
     /// A vector containing all queued jobs in FIFO order.
     fn drain(&self) -> Vec<PoolJob> {
         let mut jobs = Vec::new();
-        while let Some(job) = self.steal_one() {
+        while let Some(job) = steal_one(&self.stealer) {
+            jobs.push(job);
+        }
+        while let Some(job) = steal_one(&self.inbox) {
             jobs.push(job);
         }
         jobs
     }
+}
 
-    /// Steals one job from this queue and transparently retries transient
-    /// contention states.
+/// Worker-owned queue runtime.
+///
+/// The shared [`WorkerQueue`] can be seen by submitters, shutdown, and thieves,
+/// but only the owning worker thread may touch `local`. This mirrors the
+/// `Worker/Stealer` ownership split used by `crossbeam-deque` and avoids using
+/// a shared injector for the worker's hottest repeated pops.
+struct WorkerRuntime {
+    /// Shared metadata and externally visible inbox for this worker.
+    queue: Arc<WorkerQueue>,
+    /// Owner-only deque used by the worker for batched and stolen jobs.
+    local: Worker<PoolJob>,
+}
+
+impl WorkerRuntime {
+    /// Creates a worker runtime and its shared queue handle.
+    ///
+    /// # Parameters
+    ///
+    /// * `worker_index` - Stable index of the worker owning this runtime.
     ///
     /// # Returns
     ///
-    /// `Some(job)` when a job is available, otherwise `None`.
-    fn steal_one(&self) -> Option<PoolJob> {
-        loop {
-            match self.jobs.steal() {
-                Steal::Success(job) => return Some(job),
-                Steal::Empty => return None,
-                // Another thread raced us while mutating queue internals.
-                // Retry immediately to mask this transient state from callers.
-                Steal::Retry => continue,
-            }
+    /// A runtime whose shared queue handle can be registered for submitters and
+    /// thieves while its local deque remains owner-only.
+    fn new(worker_index: usize) -> Self {
+        let local = Worker::new_fifo();
+        let queue = Arc::new(WorkerQueue::new(worker_index, local.stealer()));
+        Self { queue, local }
+    }
+
+    /// Returns the owning worker index.
+    #[inline]
+    fn worker_index(&self) -> usize {
+        self.queue.worker_index()
+    }
+}
+
+/// Steals one job with immediate retry on transient contention.
+///
+/// # Parameters
+///
+/// * `source` - Queue source to probe.
+///
+/// # Returns
+///
+/// `Some(job)` when the source contains a job, otherwise `None`.
+fn steal_one<S>(source: &S) -> Option<PoolJob>
+where
+    S: QueueStealSource,
+{
+    loop {
+        match source.steal_one() {
+            Steal::Success(job) => return Some(job),
+            Steal::Empty => return None,
+            // Another thread raced us while mutating queue internals. Retry
+            // immediately so callers observe a stable empty/success result.
+            Steal::Retry => continue,
         }
+    }
+}
+
+/// Steals a batch into `dest` and returns one job.
+///
+/// # Parameters
+///
+/// * `source` - Queue source that may provide one or more jobs.
+/// * `dest` - Owner-local deque receiving any stolen batch remainder.
+///
+/// # Returns
+///
+/// `Some(job)` when the source or destination yields a job, otherwise `None`.
+fn steal_batch_and_pop<S>(source: &S, dest: &Worker<PoolJob>) -> Option<PoolJob>
+where
+    S: QueueStealSource,
+{
+    loop {
+        match source.steal_batch_and_pop(dest) {
+            Steal::Success(job) => return Some(job),
+            Steal::Empty => return None,
+            Steal::Retry => continue,
+        }
+    }
+}
+
+/// Small adapter trait over crossbeam steal sources used by this module.
+trait QueueStealSource {
+    /// Steals one job from this source.
+    fn steal_one(&self) -> Steal<PoolJob>;
+
+    /// Steals a batch into `dest` and pops one job from `dest`.
+    fn steal_batch_and_pop(&self, dest: &Worker<PoolJob>) -> Steal<PoolJob>;
+}
+
+impl QueueStealSource for Injector<PoolJob> {
+    #[inline]
+    fn steal_one(&self) -> Steal<PoolJob> {
+        self.steal()
+    }
+
+    #[inline]
+    fn steal_batch_and_pop(&self, dest: &Worker<PoolJob>) -> Steal<PoolJob> {
+        Injector::steal_batch_and_pop(self, dest)
+    }
+}
+
+impl QueueStealSource for Stealer<PoolJob> {
+    #[inline]
+    fn steal_one(&self) -> Steal<PoolJob> {
+        self.steal()
+    }
+
+    #[inline]
+    fn steal_batch_and_pop(&self, dest: &Worker<PoolJob>) -> Steal<PoolJob> {
+        Stealer::steal_batch_and_pop(self, dest)
     }
 }
 
@@ -816,7 +927,7 @@ impl ThreadPoolInner {
         self: &Arc<Self>,
         reservation: WorkerStartReservation,
     ) -> Result<(), RejectedExecution> {
-        let worker_queue = self.register_worker_queue(reservation.worker_index);
+        let worker_runtime = self.register_worker_queue(reservation.worker_index);
         let has_first_task = reservation.counted_running;
         let worker_inner = Arc::clone(self);
         let mut builder = thread::Builder::new().name(format!(
@@ -827,8 +938,7 @@ impl ThreadPoolInner {
             builder = builder.stack_size(stack_size);
         }
         let first_task = reservation.first_task;
-        let worker_queue_for_run = Arc::clone(&worker_queue);
-        match builder.spawn(move || run_worker(worker_inner, worker_queue_for_run, first_task)) {
+        match builder.spawn(move || run_worker(worker_inner, worker_runtime, first_task)) {
             Ok(_) => Ok(()),
             Err(source) => {
                 // Worker thread never reached run-loop start; remove the
@@ -870,10 +980,10 @@ impl ThreadPoolInner {
     /// # Parameters
     ///
     /// * `worker_index` - Stable index of the new worker.
-    fn register_worker_queue(&self, worker_index: usize) -> Arc<WorkerQueue> {
-        let queue = Arc::new(WorkerQueue::new(worker_index));
-        self.worker_queues.write().push(Arc::clone(&queue));
-        queue
+    fn register_worker_queue(&self, worker_index: usize) -> WorkerRuntime {
+        let runtime = WorkerRuntime::new(worker_index);
+        self.worker_queues.write().push(Arc::clone(&runtime.queue));
+        runtime
     }
 
     /// Removes one worker-local queue and returns all jobs still queued in it.
@@ -915,10 +1025,11 @@ impl ThreadPoolInner {
     /// The lookup order favors locality first, then adapts by queue mode:
     ///
     /// 1. Pop from the worker's own local queue.
-    /// 2. For unbounded mode, probe global queue before steal to reduce
+    /// 2. Drain the worker's shared inbox into its local queue.
+    /// 3. For unbounded mode, probe global queue before steal to reduce
     ///    steal-scan overhead under high global backlog.
-    /// 3. Steal from other workers' local queues.
-    /// 4. Pop from the global fallback queue.
+    /// 4. Steal from other workers' local queues and inboxes.
+    /// 5. Pop from the global fallback queue.
     ///
     /// This method mutates queue-related counters only after a job is
     /// successfully claimed.
@@ -927,7 +1038,7 @@ impl ThreadPoolInner {
     ///
     /// * `_state` - Locked pool state snapshot kept by caller. This method
     ///   currently relies on atomic counters and queue primitives only.
-    /// * `worker_queue` - Local queue owned by the worker requesting work.
+    /// * `worker_runtime` - Queue runtime owned by the worker requesting work.
     ///
     /// # Returns
     ///
@@ -935,11 +1046,17 @@ impl ThreadPoolInner {
     fn try_take_queued_job_locked(
         &self,
         _state: &ThreadPoolState,
-        worker_queue: &WorkerQueue,
+        worker_runtime: &WorkerRuntime,
     ) -> Option<PoolJob> {
-        let worker_index = worker_queue.worker_index();
-        let own_job = worker_queue.pop_front();
-        if let Some(job) = own_job {
+        let worker_index = worker_runtime.worker_index();
+        if let Some(job) = worker_runtime.local.pop() {
+            let previous = self.queued_task_count.fetch_sub(1, Ordering::AcqRel);
+            debug_assert!(previous > 0, "thread pool queued task counter underflow");
+            self.running_task_count.fetch_add(1, Ordering::AcqRel);
+            return Some(job);
+        }
+
+        if let Some(job) = worker_runtime.queue.pop_inbox_into(&worker_runtime.local) {
             let previous = self.queued_task_count.fetch_sub(1, Ordering::AcqRel);
             debug_assert!(previous > 0, "thread pool queued task counter underflow");
             self.running_task_count.fetch_add(1, Ordering::AcqRel);
@@ -955,7 +1072,7 @@ impl ThreadPoolInner {
             return Some(job);
         }
 
-        if let Some(job) = self.try_steal_job_locked(worker_index) {
+        if let Some(job) = self.try_steal_job_locked(worker_index, &worker_runtime.local) {
             let previous = self.queued_task_count.fetch_sub(1, Ordering::AcqRel);
             debug_assert!(previous > 0, "thread pool queued task counter underflow");
             self.running_task_count.fetch_add(1, Ordering::AcqRel);
@@ -977,11 +1094,16 @@ impl ThreadPoolInner {
     /// # Parameters
     ///
     /// * `worker_index` - Worker that is requesting stolen work.
+    /// * `local` - Owner-local deque that receives any batched stolen jobs.
     ///
     /// # Returns
     ///
     /// `Some(job)` when any other worker queue can provide one job.
-    fn try_steal_job_locked(&self, worker_index: usize) -> Option<PoolJob> {
+    fn try_steal_job_locked(
+        &self,
+        worker_index: usize,
+        local: &Worker<PoolJob>,
+    ) -> Option<PoolJob> {
         let queues = self.worker_queues.read();
         let queue_count = queues.len();
         if queue_count <= 1 {
@@ -998,7 +1120,7 @@ impl ThreadPoolInner {
             if !victim.is_active() {
                 continue;
             }
-            if let Some(job) = victim.steal_back() {
+            if let Some(job) = victim.steal_into(local) {
                 return Some(job);
             }
         }
@@ -1291,20 +1413,20 @@ impl ThreadPoolInner {
 /// # Parameters
 ///
 /// * `inner` - Shared pool state used for queue access and counters.
-/// * `worker_queue` - Local queue owned by this worker.
+/// * `worker_runtime` - Queue runtime owned by this worker.
 /// * `first_task` - Optional job assigned directly when the worker is spawned.
 fn run_worker(
     inner: Arc<ThreadPoolInner>,
-    worker_queue: Arc<WorkerQueue>,
+    worker_runtime: WorkerRuntime,
     first_task: Option<PoolJob>,
 ) {
-    mark_worker_started(&inner, &worker_queue);
+    mark_worker_started(&inner, &worker_runtime.queue);
     if let Some(job) = first_task {
         job.run();
         finish_running_job(&inner);
     }
     loop {
-        let job = wait_for_job(&inner, &worker_queue);
+        let job = wait_for_job(&inner, &worker_runtime);
         match job {
             Some(job) => {
                 job.run();
@@ -1333,18 +1455,18 @@ fn mark_worker_started(inner: &ThreadPoolInner, worker_queue: &WorkerQueue) {
 /// # Parameters
 ///
 /// * `inner` - Shared pool state and monitor wait queue.
-/// * `worker_queue` - Local queue owned by the worker requesting a job.
+/// * `worker_runtime` - Queue runtime owned by the worker requesting a job.
 ///
 /// # Returns
 ///
 /// `Some(job)` when work is available, or `None` when the worker should exit.
-fn wait_for_job(inner: &ThreadPoolInner, worker_queue: &WorkerQueue) -> Option<PoolJob> {
-    let worker_index = worker_queue.worker_index();
+fn wait_for_job(inner: &ThreadPoolInner, worker_runtime: &WorkerRuntime) -> Option<PoolJob> {
+    let worker_index = worker_runtime.worker_index();
     let mut state = inner.lock_state();
     loop {
         match state.lifecycle {
             ThreadPoolLifecycle::Running => {
-                if let Some(job) = inner.try_take_queued_job_locked(&mut state, worker_queue) {
+                if let Some(job) = inner.try_take_queued_job_locked(&mut state, worker_runtime) {
                     return Some(job);
                 }
                 if state.live_workers > state.maximum_pool_size && state.live_workers > 0 {
@@ -1357,7 +1479,7 @@ fn wait_for_job(inner: &ThreadPoolInner, worker_queue: &WorkerQueue) -> Option<P
                     // Re-check queues after publishing idle state to close the
                     // window where submit races with idle accounting and would
                     // otherwise miss waking this worker.
-                    if let Some(job) = inner.try_take_queued_job_locked(&state, worker_queue) {
+                    if let Some(job) = inner.try_take_queued_job_locked(&state, worker_runtime) {
                         unmark_worker_idle(inner, &mut state);
                         return Some(job);
                     }
@@ -1376,7 +1498,7 @@ fn wait_for_job(inner: &ThreadPoolInner, worker_queue: &WorkerQueue) -> Option<P
                     // Re-check queues after publishing idle state to close the
                     // window where submit races with idle accounting and would
                     // otherwise miss waking this worker.
-                    if let Some(job) = inner.try_take_queued_job_locked(&state, worker_queue) {
+                    if let Some(job) = inner.try_take_queued_job_locked(&state, worker_runtime) {
                         unmark_worker_idle(inner, &mut state);
                         return Some(job);
                     }
@@ -1385,7 +1507,7 @@ fn wait_for_job(inner: &ThreadPoolInner, worker_queue: &WorkerQueue) -> Option<P
                 }
             }
             ThreadPoolLifecycle::Shutdown => {
-                if let Some(job) = inner.try_take_queued_job_locked(&mut state, worker_queue) {
+                if let Some(job) = inner.try_take_queued_job_locked(&mut state, worker_runtime) {
                     return Some(job);
                 }
                 unregister_exiting_worker(inner, &mut state, worker_index);
