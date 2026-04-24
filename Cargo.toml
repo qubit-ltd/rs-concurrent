@@ -48,6 +48,7 @@ qubit-function = "0.10"
 tokio = { version = "1.5", features = ["macros", "rt-multi-thread", "time"] }
 criterion = "0.5"
 rayon = "1.12"
+threadpool = "1.8"
 
 [[bench]]
 name = "thread_pool_bench"

@@ -7,7 +7,7 @@ use std::{
     fs,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{mpsc, Arc, OnceLock},
 };
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
@@ -140,6 +140,55 @@ fn run_rayon_cpu_work_batch(worker_count: usize, task_count: usize, inner_iters:
     black_box(sum);
 }
 
+/// Drains results produced by tasks submitted to the external `threadpool` crate.
+///
+/// # Parameters
+///
+/// * `receiver` - Channel receiving one checksum per completed task.
+/// * `task_count` - Number of task results expected from the channel.
+///
+/// # Panics
+///
+/// Panics if a submitted task fails to send its result.
+fn drain_threadpool_crate_results(receiver: mpsc::Receiver<usize>, task_count: usize) {
+    let mut sum = 0usize;
+    for _ in 0..task_count {
+        let value = receiver
+            .recv()
+            .expect("threadpool crate task should send result");
+        sum = sum.wrapping_add(value);
+    }
+    black_box(sum);
+}
+
+/// Runs one batch with the external `threadpool` crate.
+///
+/// # Parameters
+///
+/// * `worker_count` - Number of worker threads.
+/// * `task_count` - Number of tasks in this batch.
+/// * `inner_iters` - CPU iterations performed by each task.
+fn run_threadpool_crate_cpu_work_batch(
+    worker_count: usize,
+    task_count: usize,
+    inner_iters: usize,
+) {
+    let pool = threadpool::ThreadPool::new(worker_count);
+    let (sender, receiver) = mpsc::channel();
+    for _ in 0..task_count {
+        let sender = sender.clone();
+        pool.execute(move || {
+            let value = compute_cpu_work(inner_iters);
+            sender
+                .send(value)
+                .expect("threadpool crate receiver should stay alive");
+        });
+    }
+    drop(sender);
+    pool.join();
+    drain_threadpool_crate_results(receiver, task_count);
+}
+
 /// Describes one skewed workload profile.
 struct SkewedWorkloadSpec {
     /// Stable benchmark case name.
@@ -254,6 +303,35 @@ fn run_rayon_cpu_skewed_batch(worker_count: usize, task_count: usize, spec: &Ske
             .reduce(|| 0usize, usize::wrapping_add)
     });
     black_box(sum);
+}
+
+/// Runs one skewed batch with the external `threadpool` crate.
+///
+/// # Parameters
+///
+/// * `worker_count` - Number of worker threads.
+/// * `task_count` - Number of tasks in this batch.
+/// * `spec` - Skewed workload profile.
+fn run_threadpool_crate_cpu_skewed_batch(
+    worker_count: usize,
+    task_count: usize,
+    spec: &SkewedWorkloadSpec,
+) {
+    let pool = threadpool::ThreadPool::new(worker_count);
+    let (sender, receiver) = mpsc::channel();
+    for task_index in 0..task_count {
+        let iterations = skewed_iters_for_task(task_index, spec);
+        let sender = sender.clone();
+        pool.execute(move || {
+            let value = compute_cpu_work(iterations);
+            sender
+                .send(value)
+                .expect("threadpool crate receiver should stay alive");
+        });
+    }
+    drop(sender);
+    pool.join();
+    drain_threadpool_crate_results(receiver, task_count);
 }
 
 /// Resolves the benchmark dataset root directory.
@@ -790,6 +868,29 @@ fn run_rayon_cpu_dataset_batch(worker_count: usize, iterations: &[usize]) {
     black_box(sum);
 }
 
+/// Runs one dataset-derived CPU batch with the external `threadpool` crate.
+///
+/// # Parameters
+///
+/// * `worker_count` - Number of worker threads.
+/// * `iterations` - Per-task iteration counts.
+fn run_threadpool_crate_cpu_dataset_batch(worker_count: usize, iterations: &[usize]) {
+    let pool = threadpool::ThreadPool::new(worker_count);
+    let (sender, receiver) = mpsc::channel();
+    for &inner_iters in iterations {
+        let sender = sender.clone();
+        pool.execute(move || {
+            let value = compute_cpu_work(inner_iters);
+            sender
+                .send(value)
+                .expect("threadpool crate receiver should stay alive");
+        });
+    }
+    drop(sender);
+    pool.join();
+    drain_threadpool_crate_results(receiver, iterations.len());
+}
+
 /// Reads one file and computes a deterministic checksum.
 ///
 /// # Parameters
@@ -859,6 +960,30 @@ fn run_rayon_io_file_batch(worker_count: usize, files: &[PathBuf]) {
             .reduce(|| 0usize, usize::wrapping_add)
     });
     black_box(sum);
+}
+
+/// Runs one IO batch with the external `threadpool` crate.
+///
+/// # Parameters
+///
+/// * `worker_count` - Number of worker threads.
+/// * `files` - File paths read by submitted tasks.
+fn run_threadpool_crate_io_file_batch(worker_count: usize, files: &[PathBuf]) {
+    let pool = threadpool::ThreadPool::new(worker_count);
+    let (sender, receiver) = mpsc::channel();
+    for path in files {
+        let path = path.clone();
+        let sender = sender.clone();
+        pool.execute(move || {
+            let value = file_checksum(&path);
+            sender
+                .send(value)
+                .expect("threadpool crate receiver should stay alive");
+        });
+    }
+    drop(sender);
+    pool.join();
+    drain_threadpool_crate_results(receiver, files.len());
 }
 
 /// Traverses adjacency of one frontier vertex and returns a checksum.
@@ -938,6 +1063,31 @@ fn run_rayon_graph_dataset_batch(worker_count: usize, workload: &DatasetGraphWor
     black_box(sum);
 }
 
+/// Runs one graph-traversal batch with the external `threadpool` crate.
+///
+/// # Parameters
+///
+/// * `worker_count` - Number of worker threads.
+/// * `workload` - Graph workload with adjacency and frontier data.
+fn run_threadpool_crate_graph_dataset_batch(worker_count: usize, workload: &DatasetGraphWorkload) {
+    let pool = threadpool::ThreadPool::new(worker_count);
+    let (sender, receiver) = mpsc::channel();
+    for &vertex in &workload.frontier {
+        let offsets = Arc::clone(&workload.offsets);
+        let edges = Arc::clone(&workload.edges);
+        let sender = sender.clone();
+        pool.execute(move || {
+            let value = traverse_frontier_vertex(&offsets, &edges, vertex);
+            sender
+                .send(value)
+                .expect("threadpool crate receiver should stay alive");
+        });
+    }
+    drop(sender);
+    pool.join();
+    drain_threadpool_crate_results(receiver, workload.frontier.len());
+}
+
 /// Benchmarks throughput under different worker counts and task types.
 fn bench_thread_pool_throughput(c: &mut Criterion) {
     let mut group = c.benchmark_group("thread_pool_throughput");
@@ -959,9 +1109,9 @@ fn bench_thread_pool_throughput(c: &mut Criterion) {
     group.finish();
 }
 
-/// Compares thread pool throughput against Rayon on the same workload model.
-fn bench_thread_pool_vs_rayon(c: &mut Criterion) {
-    let mut group = c.benchmark_group("thread_pool_vs_rayon");
+/// Compares thread pool throughput against Rayon and the `threadpool` crate.
+fn bench_thread_pool_vs_libraries(c: &mut Criterion) {
+    let mut group = c.benchmark_group("thread_pool_vs_libraries");
     let workers = [1usize, 4, 8];
     let granularities = [256usize, 2_048];
     let total_iters = 2_048_000usize;
@@ -980,6 +1130,14 @@ fn bench_thread_pool_vs_rayon(c: &mut Criterion) {
                 BenchmarkId::from_parameter(rayon_id),
                 &worker_count,
                 |b, &wc| b.iter(|| run_rayon_cpu_work_batch(wc, task_count, inner_iters)),
+            );
+            let threadpool_id = format!("threadpool/workers={worker_count}/iters={inner_iters}");
+            group.bench_with_input(
+                BenchmarkId::from_parameter(threadpool_id),
+                &worker_count,
+                |b, &wc| {
+                    b.iter(|| run_threadpool_crate_cpu_work_batch(wc, task_count, inner_iters))
+                },
             );
         }
     }
@@ -1005,8 +1163,8 @@ fn bench_thread_pool_granularity(c: &mut Criterion) {
     group.finish();
 }
 
-/// Compares ThreadPool and Rayon on skewed workloads where a small fraction of
-/// tasks are much heavier than the rest.
+/// Compares ThreadPool, Rayon, and the `threadpool` crate on skewed workloads
+/// where a small fraction of tasks are much heavier than the rest.
 fn bench_thread_pool_skewed_workload(c: &mut Criterion) {
     let mut group = c.benchmark_group("thread_pool_skewed_workload");
     let workers = [4usize, 8];
@@ -1047,12 +1205,22 @@ fn bench_thread_pool_skewed_workload(c: &mut Criterion) {
                 &worker_count,
                 |b, &wc| b.iter(|| run_rayon_cpu_skewed_batch(wc, task_count, profile)),
             );
+            let threadpool_id =
+                format!("threadpool/workers={worker_count}/profile={}", profile.name);
+            group.bench_with_input(
+                BenchmarkId::from_parameter(threadpool_id),
+                &worker_count,
+                |b, &wc| {
+                    b.iter(|| run_threadpool_crate_cpu_skewed_batch(wc, task_count, profile))
+                },
+            );
         }
     }
     group.finish();
 }
 
-/// Compares ThreadPool and Rayon on CPU workloads derived from PBBS text data.
+/// Compares ThreadPool, Rayon, and the `threadpool` crate on CPU workloads
+/// derived from PBBS text data.
 fn bench_thread_pool_dataset_cpu(c: &mut Criterion) {
     let Some(workload) = dataset_cpu_workload() else {
         return;
@@ -1085,12 +1253,22 @@ fn bench_thread_pool_dataset_cpu(c: &mut Criterion) {
                 &worker_count,
                 |b, &wc| b.iter(|| run_rayon_cpu_dataset_batch(wc, iterations)),
             );
+            let threadpool_id = format!(
+                "threadpool/workers={worker_count}/dataset={}/tasks={task_count}",
+                workload.name
+            );
+            group.bench_with_input(
+                BenchmarkId::from_parameter(threadpool_id),
+                &worker_count,
+                |b, &wc| b.iter(|| run_threadpool_crate_cpu_dataset_batch(wc, iterations)),
+            );
         }
     }
     group.finish();
 }
 
-/// Compares ThreadPool and Rayon on dataset-backed IO workloads.
+/// Compares ThreadPool, Rayon, and the `threadpool` crate on dataset-backed IO
+/// workloads.
 fn bench_thread_pool_dataset_io(c: &mut Criterion) {
     let mut workloads = Vec::new();
     if let Some(small) = dataset_io_small_workload() {
@@ -1122,12 +1300,20 @@ fn bench_thread_pool_dataset_io(c: &mut Criterion) {
                 &worker_count,
                 |b, &wc| b.iter(|| run_rayon_io_file_batch(wc, &workload.files)),
             );
+            let threadpool_id =
+                format!("threadpool/workers={worker_count}/dataset={}", workload.name);
+            group.bench_with_input(
+                BenchmarkId::from_parameter(threadpool_id),
+                &worker_count,
+                |b, &wc| b.iter(|| run_threadpool_crate_io_file_batch(wc, &workload.files)),
+            );
         }
     }
     group.finish();
 }
 
-/// Compares ThreadPool and Rayon on PBBS graph-traversal workloads.
+/// Compares ThreadPool, Rayon, and the `threadpool` crate on PBBS
+/// graph-traversal workloads.
 fn bench_thread_pool_dataset_graph_traversal(c: &mut Criterion) {
     let mut workloads = Vec::new();
     if let Some(workload) = dataset_graph_rand_local_workload() {
@@ -1159,6 +1345,13 @@ fn bench_thread_pool_dataset_graph_traversal(c: &mut Criterion) {
                 &worker_count,
                 |b, &wc| b.iter(|| run_rayon_graph_dataset_batch(wc, workload)),
             );
+            let threadpool_id =
+                format!("threadpool/workers={worker_count}/dataset={}", workload.name);
+            group.bench_with_input(
+                BenchmarkId::from_parameter(threadpool_id),
+                &worker_count,
+                |b, &wc| b.iter(|| run_threadpool_crate_graph_dataset_batch(wc, workload)),
+            );
         }
     }
     group.finish();
@@ -1169,7 +1362,7 @@ criterion_group!(
     config = Criterion::default().sample_size(20);
     targets = bench_thread_pool_throughput,
         bench_thread_pool_granularity,
-        bench_thread_pool_vs_rayon,
+        bench_thread_pool_vs_libraries,
         bench_thread_pool_skewed_workload,
         bench_thread_pool_dataset_cpu,
         bench_thread_pool_dataset_io,
