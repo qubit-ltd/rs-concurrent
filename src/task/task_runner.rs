@@ -10,7 +10,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use qubit_function::Callable;
 
-use super::{TaskExecutionError, TaskResult};
+use super::{TaskCompletion, TaskExecutionError, TaskResult};
 
 /// Runs a callable and converts task failure and panic into a handle result.
 ///
@@ -31,4 +31,17 @@ where
         Ok(Err(err)) => Err(TaskExecutionError::Failed(err)),
         Err(_) => Err(TaskExecutionError::Panicked),
     }
+}
+
+/// Runs a callable task through a task completion endpoint.
+///
+/// # Parameters
+///
+/// * `task` - Callable to execute.
+/// * `completion` - Completion endpoint that receives the final task result.
+pub(crate) fn run_task<C, R, E>(task: C, completion: TaskCompletion<R, E>)
+where
+    C: Callable<R, E>,
+{
+    completion.start_and_complete(|| run_callable(task));
 }

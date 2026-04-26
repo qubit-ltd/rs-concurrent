@@ -10,7 +10,7 @@ use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use qubit_function::Callable;
 
-use crate::task::TaskHandle;
+use crate::task::{TaskHandle, task_runner::run_task};
 
 use super::super::{ExecutorService, RejectedExecution, ShutdownReport};
 use super::pool_job::PoolJob;
@@ -81,7 +81,7 @@ impl ThreadPool {
     /// The number of accepted tasks that have not started yet.
     #[inline]
     pub fn queued_count(&self) -> usize {
-        self.inner.queued_count()
+        self.inner.read_state(|state| state.queued_tasks)
     }
 
     /// Returns the number of tasks currently held by workers.
@@ -92,7 +92,7 @@ impl ThreadPool {
     /// yet finished processing.
     #[inline]
     pub fn running_count(&self) -> usize {
-        self.inner.running_count()
+        self.inner.read_state(|state| state.running_tasks)
     }
 
     /// Returns how many worker threads are still running in this pool.
@@ -312,7 +312,13 @@ impl ExecutorService for ThreadPool {
         E: Send + 'static,
     {
         let (handle, completion) = TaskHandle::completion_pair();
-        let job = PoolJob::from_task(task, completion);
+        let completion_for_run = completion.clone();
+        let job = PoolJob::new(
+            Box::new(move || run_task(task, completion_for_run)),
+            Box::new(move || {
+                completion.cancel();
+            }),
+        );
         self.inner.submit(job)?;
         Ok(handle)
     }

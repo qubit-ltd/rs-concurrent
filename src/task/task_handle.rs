@@ -7,15 +7,13 @@
  *
  ******************************************************************************/
 use std::{
-    cell::UnsafeCell,
     future::Future,
     pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicU8, Ordering},
-    },
+    sync::Arc,
     task::{Context, Poll, Waker},
 };
+
+use qubit_atomic::Atomic;
 
 use crate::lock::Monitor;
 
@@ -42,18 +40,20 @@ pub struct TaskHandle<R, E> {
 
 /// Shared state used by a task handle and its completing runner.
 struct TaskHandleInner<R, E> {
-    /// Final task result written once by completion and read once by handle.
-    result: UnsafeCell<Option<TaskResult<R, E>>>,
-    /// Monitor protecting blocking waiters and async waker.
-    wait_state: Monitor<TaskHandleWaitState>,
-    /// Atomic lifecycle for cheap start, cancel, and completion probes.
-    status: AtomicU8,
+    /// Monitor protecting the task result, state flags, and async waker.
+    state: Monitor<TaskHandleState<R, E>>,
+    /// Atomic completion flag for cheap non-blocking probes.
+    done: Atomic<bool>,
 }
 
-/// Mutable waiter state protected by the task handle monitor.
-struct TaskHandleWaitState {
-    /// Number of threads currently blocked in [`TaskHandle::get`].
-    blocking_waiters: usize,
+/// Mutable completion state protected by the task handle mutex.
+struct TaskHandleState<R, E> {
+    /// Final task result, present only after completion and before retrieval.
+    result: Option<TaskResult<R, E>>,
+    /// Whether a runner has started executing the task.
+    started: bool,
+    /// Whether a terminal result has been published.
+    completed: bool,
     /// Last async waker registered by polling the handle before completion.
     waker: Option<Waker>,
 }
@@ -69,18 +69,6 @@ pub struct TaskCompletion<R, E> {
     inner: Arc<TaskHandleInner<R, E>>,
 }
 
-/// Task has been accepted but has not started.
-const TASK_PENDING: u8 = 0;
-/// Task runner has started executing the callable.
-const TASK_RUNNING: u8 = 1;
-/// A completion path is publishing the final result.
-const TASK_PUBLISHING: u8 = 2;
-/// Final result has been published.
-const TASK_COMPLETED: u8 = 3;
-
-unsafe impl<R: Send, E: Send> Send for TaskHandleInner<R, E> {}
-unsafe impl<R: Send, E: Send> Sync for TaskHandleInner<R, E> {}
-
 impl<R, E> TaskHandle<R, E> {
     /// Creates a handle and completion endpoint used by a task runner.
     ///
@@ -89,12 +77,13 @@ impl<R, E> TaskHandle<R, E> {
     /// A handle for the caller and a completion endpoint for the runner.
     pub fn completion_pair() -> (Self, TaskCompletion<R, E>) {
         let inner = Arc::new(TaskHandleInner {
-            result: UnsafeCell::new(None),
-            wait_state: Monitor::new(TaskHandleWaitState {
-                blocking_waiters: 0,
+            state: Monitor::new(TaskHandleState {
+                result: None,
+                started: false,
+                completed: false,
                 waker: None,
             }),
-            status: AtomicU8::new(TASK_PENDING),
+            done: Atomic::new(false),
         });
         let handle = Self {
             inner: Arc::clone(&inner),
@@ -113,23 +102,15 @@ impl<R, E> TaskHandle<R, E> {
     /// panics, or is cancelled before producing a value, the corresponding
     /// [`TaskExecutionError`] is returned.
     pub fn get(self) -> TaskResult<R, E> {
-        if self.inner.status.load(Ordering::Acquire) != TASK_COMPLETED {
-            let mut wait_state = self.inner.wait_state.lock();
-            if self.inner.status.load(Ordering::Acquire) != TASK_COMPLETED {
-                wait_state.blocking_waiters += 1;
-                while self.inner.status.load(Ordering::Acquire) != TASK_COMPLETED {
-                    wait_state = wait_state.wait();
-                }
-                wait_state.blocking_waiters = wait_state
-                    .blocking_waiters
-                    .checked_sub(1)
-                    .expect("task handle blocking waiter counter underflow");
-            }
-        }
-        // SAFETY: TASK_COMPLETED is published with Release only after the
-        // result slot has been written. This handle is consumed by get(), so
-        // the result can be taken at most once through this path.
-        unsafe { self.inner.take_result() }
+        self.inner.state.wait_until(
+            |state| state.completed,
+            |state| {
+                state
+                    .result
+                    .take()
+                    .expect("task handle completed without a result")
+            },
+        )
     }
 
     /// Returns whether the task has reported completion.
@@ -139,7 +120,7 @@ impl<R, E> TaskHandle<R, E> {
     /// `true` after the task runner has produced or abandoned its final result.
     #[inline]
     pub fn is_done(&self) -> bool {
-        self.inner.status.load(Ordering::Acquire) == TASK_COMPLETED
+        self.inner.done.load()
     }
 
     /// Attempts to cancel the task.
@@ -180,23 +161,21 @@ impl<R, E> Future for TaskHandle<R, E> {
     /// Panics if the shared state says the task completed but no final result
     /// is stored. That indicates an internal executor bug.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.inner.status.load(Ordering::Acquire) == TASK_COMPLETED {
-            // SAFETY: the completed status guarantees the result has been
-            // written, and Future::poll returns Ready only once after taking it.
-            return Poll::Ready(unsafe { self.inner.take_result() });
-        }
-        let completed = self.inner.wait_state.write(|state| {
-            if self.inner.status.load(Ordering::Acquire) == TASK_COMPLETED {
-                true
+        let result = self.inner.state.write(|state| {
+            if state.completed {
+                Some(
+                    state
+                        .result
+                        .take()
+                        .expect("task handle completed without a result"),
+                )
             } else {
                 state.waker = Some(cx.waker().clone());
-                false
+                None
             }
         });
-        if completed {
-            // SAFETY: the second completed check ran while no new waker could
-            // be registered concurrently through this handle state.
-            Poll::Ready(unsafe { self.inner.take_result() })
+        if let Some(result) = result {
+            Poll::Ready(result)
         } else {
             Poll::Pending
         }
@@ -206,45 +185,9 @@ impl<R, E> Future for TaskHandle<R, E> {
 impl<R, E> TaskHandleInner<R, E> {
     /// Notifies every waiter that the shared task state may have changed.
     ///
-    /// This wakes blocking waiters parked in [`TaskHandle::get`].
+    /// This wakes blocking waiters parked in [`Monitor::wait_until`].
     fn notify_completion(&self) {
-        self.wait_state.notify_all();
-    }
-
-    /// Stores the final task result before publishing completion.
-    ///
-    /// # Parameters
-    ///
-    /// * `result` - Final result to place in the one-shot slot.
-    ///
-    /// # Safety
-    ///
-    /// Caller must own the transition to `TASK_PUBLISHING`, ensuring no other
-    /// completion path can write this slot concurrently.
-    unsafe fn store_result(&self, result: TaskResult<R, E>) {
-        // SAFETY: guaranteed by the function contract.
-        unsafe {
-            *self.result.get() = Some(result);
-        }
-    }
-
-    /// Takes the final task result after completion.
-    ///
-    /// # Returns
-    ///
-    /// Final task result stored by the completion path.
-    ///
-    /// # Safety
-    ///
-    /// Caller must observe `TASK_COMPLETED` with acquire ordering and must
-    /// ensure the handle result is consumed at most once.
-    unsafe fn take_result(&self) -> TaskResult<R, E> {
-        // SAFETY: guaranteed by the function contract.
-        unsafe {
-            (*self.result.get())
-                .take()
-                .expect("task handle completed without a result")
-        }
+        self.state.notify_all();
     }
 }
 
@@ -269,15 +212,14 @@ impl<R, E> TaskCompletion<R, E> {
     /// `true` if the runner should execute the task, or `false` if the task was
     /// already completed through cancellation.
     pub fn start(&self) -> bool {
-        self.inner
-            .status
-            .compare_exchange(
-                TASK_PENDING,
-                TASK_RUNNING,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
+        self.inner.state.write(|state| {
+            if state.completed {
+                false
+            } else {
+                state.started = true;
+                true
+            }
+        })
     }
 
     /// Completes the task with its final result.
@@ -289,9 +231,7 @@ impl<R, E> TaskCompletion<R, E> {
     /// * `result` - Final task result to publish if the task is not already
     ///   completed.
     pub fn complete(&self, result: TaskResult<R, E>) {
-        if self.begin_publish_completion() {
-            self.publish_result(result);
-        }
+        self.finish(result, |_| true);
     }
 
     /// Starts the task and completes it with a lazily produced result.
@@ -320,33 +260,6 @@ impl<R, E> TaskCompletion<R, E> {
         true
     }
 
-    /// Starts and completes a uniquely owned executor task.
-    ///
-    /// The supplied closure is executed only if this endpoint wins the start
-    /// race. Unlike [`Self::start_and_complete`], this crate-internal path
-    /// assumes the executor owns the only completion endpoint that can publish
-    /// a non-cancellation result, so it can skip the second completion CAS.
-    ///
-    /// # Parameters
-    ///
-    /// * `task` - Closure that runs the accepted task and returns its final
-    ///   result.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the closure was executed and its result was published, or
-    /// `false` if cancellation completed the task before it started.
-    pub(crate) fn start_and_complete_unique<F>(&self, task: F) -> bool
-    where
-        F: FnOnce() -> TaskResult<R, E>,
-    {
-        if !self.start() {
-            return false;
-        }
-        self.publish_unique_started_result(task());
-        true
-    }
-
     /// Cancels the task if it has not started yet.
     ///
     /// # Returns
@@ -354,85 +267,42 @@ impl<R, E> TaskCompletion<R, E> {
     /// `true` if this call published a cancellation result, or `false` if the
     /// task was already started or completed.
     pub fn cancel(&self) -> bool {
-        if self
-            .inner
-            .status
-            .compare_exchange(
-                TASK_PENDING,
-                TASK_PUBLISHING,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_err()
-        {
-            return false;
-        }
-        self.publish_result(Err(TaskExecutionError::Cancelled));
-        true
+        self.finish(Err(TaskExecutionError::Cancelled), |state| !state.started)
     }
 
-    /// Claims the right to publish a non-cancellation completion result.
+    /// Publishes a terminal result when the supplied predicate allows it.
+    ///
+    /// # Parameters
+    ///
+    /// * `result` - Terminal result to store.
+    /// * `can_finish` - Predicate evaluated under the monitor lock to decide
+    ///   whether this path may publish the result.
     ///
     /// # Returns
     ///
-    /// `true` if this completion endpoint may store the result.
-    fn begin_publish_completion(&self) -> bool {
-        let mut current = self.inner.status.load(Ordering::Acquire);
-        loop {
-            match current {
-                TASK_PENDING | TASK_RUNNING => {
-                    match self.inner.status.compare_exchange_weak(
-                        current,
-                        TASK_PUBLISHING,
-                        Ordering::AcqRel,
-                        Ordering::Acquire,
-                    ) {
-                        Ok(_) => return true,
-                        Err(actual) => current = actual,
-                    }
-                }
-                TASK_PUBLISHING | TASK_COMPLETED => return false,
-                _ => unreachable!("invalid task handle status"),
+    /// `true` if the result was published and waiters were notified, or
+    /// `false` if another completion path already won or `can_finish`
+    /// rejected the transition.
+    fn finish<F>(&self, result: TaskResult<R, E>, can_finish: F) -> bool
+    where
+        F: FnOnce(&TaskHandleState<R, E>) -> bool,
+    {
+        let (published, waker) = self.inner.state.write(|state| {
+            if state.completed || !can_finish(state) {
+                return (false, None);
             }
+            state.result = Some(result);
+            state.completed = true;
+            self.inner.done.store(true);
+            (true, state.waker.take())
+        });
+        if !published {
+            return false;
         }
-    }
-
-    /// Publishes the result for a uniquely started executor task.
-    ///
-    /// # Parameters
-    ///
-    /// * `result` - Terminal result to store.
-    fn publish_unique_started_result(&self, result: TaskResult<R, E>) {
-        debug_assert_eq!(
-            self.inner.status.load(Ordering::Acquire),
-            TASK_RUNNING,
-            "unique task completion must start from running state"
-        );
-        self.publish_result(result);
-    }
-
-    /// Stores the final result and wakes registered waiters.
-    ///
-    /// # Parameters
-    ///
-    /// * `result` - Terminal result to store.
-    fn publish_result(&self, result: TaskResult<R, E>) {
-        // SAFETY: begin_publish_completion(), cancel(), or the crate-internal
-        // unique completion path has given this endpoint exclusive ownership
-        // of the result slot.
-        unsafe {
-            self.inner.store_result(result);
-        }
-        self.inner.status.store(TASK_COMPLETED, Ordering::Release);
-        let (notify_blocking_waiters, waker) = self
-            .inner
-            .wait_state
-            .write(|state| (state.blocking_waiters > 0, state.waker.take()));
-        if notify_blocking_waiters {
-            self.inner.notify_completion();
-        }
+        self.inner.notify_completion();
         if let Some(waker) = waker {
             waker.wake();
         }
+        true
     }
 }

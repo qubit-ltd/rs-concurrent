@@ -6,22 +6,40 @@
  *    All rights reserved.
  *
  ******************************************************************************/
-use std::time::Duration;
+use std::{collections::VecDeque, time::Duration};
 
+use super::pool_job::PoolJob;
 use super::thread_pool_config::ThreadPoolConfig;
 use super::thread_pool_lifecycle::ThreadPoolLifecycle;
 
-/// Mutable pool state protected by
-/// [`super::thread_pool_inner::ThreadPoolInner::state_monitor`].
+/// Mutable pool state protected by [`super::thread_pool_inner::ThreadPoolInner::state`].
 pub(super) struct ThreadPoolState {
     /// Current lifecycle state controlling submissions and worker exits.
     pub(super) lifecycle: ThreadPoolLifecycle,
+    /// Global fallback FIFO queue for accepted jobs waiting for a worker.
+    ///
+    /// Most jobs may be dispatched into per-worker local queues first. This
+    /// global queue is kept as an injection fallback and as a migration target
+    /// when workers retire.
+    pub(super) queue: VecDeque<PoolJob>,
+    /// Number of accepted jobs that are queued but not started yet.
+    ///
+    /// This includes jobs in the global queue and all per-worker local queues.
+    pub(super) queued_tasks: usize,
     /// Optional maximum number of queued jobs.
     pub(super) queue_capacity: Option<usize>,
+    /// Number of jobs currently held by workers.
+    pub(super) running_tasks: usize,
     /// Number of worker loops that have not exited.
     pub(super) live_workers: usize,
     /// Number of live workers currently waiting for work.
     pub(super) idle_workers: usize,
+    /// Total number of jobs accepted since pool creation.
+    pub(super) submitted_tasks: usize,
+    /// Total number of worker-held jobs completed since pool creation.
+    pub(super) completed_tasks: usize,
+    /// Total number of queued jobs cancelled by abrupt shutdown.
+    pub(super) cancelled_tasks: usize,
     /// Current configured core pool size.
     pub(super) core_pool_size: usize,
     /// Current configured maximum pool size.
@@ -37,8 +55,9 @@ pub(super) struct ThreadPoolState {
 impl ThreadPoolState {
     /// Builds the initial mutex-protected pool state for a newly created pool.
     ///
-    /// Lifecycle starts as [`ThreadPoolLifecycle::Running`], and sizing or
-    /// policy fields are copied from `config`.
+    /// Counter fields start at zero, the job queue is empty, the lifecycle is
+    /// [`ThreadPoolLifecycle::Running`], and sizing or policy fields are copied
+    /// from `config`.
     ///
     /// # Parameters
     ///
@@ -50,7 +69,7 @@ impl ThreadPoolState {
     /// # Returns
     ///
     /// A [`ThreadPoolState`] ready to be wrapped by
-    /// [`ThreadPoolInner::state_monitor`](super::thread_pool_inner::ThreadPoolInner::state_monitor).
+    /// [`ThreadPoolInner::state`](super::thread_pool_inner::ThreadPoolInner::state).
     ///
     /// # Note
     ///
@@ -63,15 +82,44 @@ impl ThreadPoolState {
     pub(super) fn new(config: ThreadPoolConfig) -> Self {
         Self {
             lifecycle: ThreadPoolLifecycle::Running,
+            queue: VecDeque::new(),
+            queued_tasks: 0,
             queue_capacity: config.queue_capacity,
+            running_tasks: 0,
             live_workers: 0,
             idle_workers: 0,
+            submitted_tasks: 0,
+            completed_tasks: 0,
+            cancelled_tasks: 0,
             core_pool_size: config.core_pool_size,
             maximum_pool_size: config.maximum_pool_size,
             keep_alive: config.keep_alive,
             allow_core_thread_timeout: config.allow_core_thread_timeout,
             next_worker_index: 0,
         }
+    }
+
+    /// Returns whether the queue is currently full.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the queue has a configured capacity and has reached it.
+    pub(super) fn is_saturated(&self) -> bool {
+        self.queue_capacity
+            .is_some_and(|capacity| self.queued_tasks >= capacity)
+    }
+
+    /// Returns whether the service lifecycle is fully terminated.
+    ///
+    /// # Returns
+    ///
+    /// `true` after shutdown has started, the queue is empty, no jobs are
+    /// running, and no workers remain live.
+    pub(super) fn is_terminated(&self) -> bool {
+        !self.lifecycle.is_running()
+            && self.queued_tasks == 0
+            && self.running_tasks == 0
+            && self.live_workers == 0
     }
 
     /// Returns whether an idle worker should use a timed wait.

@@ -59,38 +59,23 @@ impl ThreadPoolStats {
     /// # Parameters
     ///
     /// * `state` - Current [`ThreadPoolState`] while the pool monitor is held.
-    /// * `queued_tasks` - Number of accepted tasks currently queued.
-    /// * `running_tasks` - Number of tasks currently held by workers.
-    /// * `submitted_tasks` - Total number of accepted tasks.
-    /// * `completed_tasks` - Total number of completed tasks.
-    /// * `cancelled_tasks` - Total number of cancelled queued tasks.
     ///
     /// # Returns
     ///
     /// A point-in-time [`ThreadPoolStats`] snapshot.
-    pub(super) fn new(
-        state: &ThreadPoolState,
-        queued_tasks: usize,
-        running_tasks: usize,
-        submitted_tasks: usize,
-        completed_tasks: usize,
-        cancelled_tasks: usize,
-    ) -> Self {
+    pub(super) fn new(state: &ThreadPoolState) -> Self {
         Self {
             core_pool_size: state.core_pool_size,
             maximum_pool_size: state.maximum_pool_size,
             live_workers: state.live_workers,
             idle_workers: state.idle_workers,
-            queued_tasks,
-            running_tasks,
-            submitted_tasks,
-            completed_tasks,
-            cancelled_tasks,
+            queued_tasks: state.queued_tasks,
+            running_tasks: state.running_tasks,
+            submitted_tasks: state.submitted_tasks,
+            completed_tasks: state.completed_tasks,
+            cancelled_tasks: state.cancelled_tasks,
             shutdown: !state.lifecycle.is_running(),
-            terminated: !state.lifecycle.is_running()
-                && queued_tasks == 0
-                && running_tasks == 0
-                && state.live_workers == 0,
+            terminated: state.is_terminated(),
         }
     }
 }

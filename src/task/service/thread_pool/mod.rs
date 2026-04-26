@@ -13,7 +13,6 @@
 // 子模块 `thread_pool` 存放公开类型 `ThreadPool`，与父模块同名是刻意分层；避免 clippy::module_inception 误报
 #![allow(clippy::module_inception)]
 
-mod cas;
 mod pool_job;
 mod thread_pool;
 mod thread_pool_build_error;
