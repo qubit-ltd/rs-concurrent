@@ -7,6 +7,23 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
+> [!IMPORTANT]
+> `qubit-concurrent` has been split into smaller, focused crates. New code
+> should depend on those crates directly instead of adding `qubit-concurrent`.
+> This repository is kept as a legacy reference for users migrating from the
+> old combined package.
+>
+> | Need | Use |
+> |------|-----|
+> | Lock wrappers, async locks, monitor primitives | `qubit-lock` |
+> | Double-checked locking executor | `qubit-dcl` |
+> | Core executor traits, task handles, direct/thread-per-task executors | `qubit-executor` |
+> | Fixed and dynamic thread pools | `qubit-thread-pool` |
+> | Rayon-backed executor service | `qubit-rayon-executor` |
+> | Tokio-backed executor service | `qubit-tokio-executor` |
+> | Aggregated blocking / CPU / Tokio execution services | `qubit-execution-services` |
+> | Higher-level task execution service with task IDs and status tracking | `qubit-task` |
+
 A comprehensive Rust concurrent utilities library providing thread-safe lock wrappers and synchronization primitives for the Qubit Rust libraries.
 
 ## Overview
@@ -52,12 +69,34 @@ Qubit Concurrent provides easy-to-use wrappers around both synchronous and async
 
 ## Installation
 
-Add this to your `Cargo.toml`:
+Do not add `qubit-concurrent` to new projects. Select the split crate that
+matches the functionality you need:
 
 ```toml
 [dependencies]
-  qubit-concurrent = "0.6.0"
+qubit-lock = "0.3"
+qubit-dcl = "0.2"
+qubit-executor = "0.1"
+qubit-thread-pool = "0.1"
+qubit-rayon-executor = "0.1"
+qubit-tokio-executor = "0.1"
+qubit-execution-services = "0.1"
+qubit-task = "0.1"
 ```
+
+Only add the crates you actually use. For example, a project that only needs
+`ArcMutex`, `ArcRwLock`, `ArcAsyncMutex`, or `Monitor` should depend on
+`qubit-lock` only.
+
+For existing projects that cannot migrate immediately, the retired combined
+crate uses this dependency name:
+
+```toml
+[dependencies]
+qubit-concurrent = "0.6.0"
+```
+
+Do not use this dependency in new code.
 
 ## Quick Start
 

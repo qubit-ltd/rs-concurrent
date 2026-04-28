@@ -7,6 +7,22 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Documentation](https://img.shields.io/badge/docs-English-blue.svg)](README.md)
 
+> [!IMPORTANT]
+> `qubit-concurrent` 已拆分为多个职责更聚焦的 crate。新项目不应再依赖
+> `qubit-concurrent`，请按实际功能直接选择拆分后的 crate。本仓库仅作为
+> 从旧组合包迁移时的历史参考。
+>
+> | 需求 | 请使用 |
+> |------|--------|
+> | 锁包装器、异步锁、Monitor 原语 | `qubit-lock` |
+> | 双重检查锁执行器 | `qubit-dcl` |
+> | 核心 executor trait、任务句柄、direct/thread-per-task executor | `qubit-executor` |
+> | 固定和动态线程池 | `qubit-thread-pool` |
+> | Rayon 驱动的 executor service | `qubit-rayon-executor` |
+> | Tokio 驱动的 executor service | `qubit-tokio-executor` |
+> | 聚合 blocking / CPU / Tokio 执行服务 | `qubit-execution-services` |
+> | 带任务 ID 和状态跟踪的高层任务执行服务 | `qubit-task` |
+
 为 Qubit Rust 组件库提供线程安全锁包装器和同步原语的综合性 Rust 并发工具库。
 
 ## 概述
@@ -47,12 +63,31 @@ Qubit Concurrent 为同步和异步锁提供易于使用的包装器，为 Rust 
 
 ## 安装
 
-在 `Cargo.toml` 中添加：
+新项目不要再添加 `qubit-concurrent`，请按需要选择拆分后的 crate：
 
 ```toml
 [dependencies]
-  qubit-concurrent = "0.6.0"
+qubit-lock = "0.3"
+qubit-dcl = "0.2"
+qubit-executor = "0.1"
+qubit-thread-pool = "0.1"
+qubit-rayon-executor = "0.1"
+qubit-tokio-executor = "0.1"
+qubit-execution-services = "0.1"
+qubit-task = "0.1"
 ```
+
+只添加实际用到的 crate。例如项目只需要 `ArcMutex`、`ArcRwLock`、
+`ArcAsyncMutex` 或 `Monitor` 时，只依赖 `qubit-lock` 即可。
+
+对于暂时无法迁移的旧项目，已退役的组合 crate 使用下面这个依赖名：
+
+```toml
+[dependencies]
+qubit-concurrent = "0.6.0"
+```
+
+新代码不要再使用这个依赖。
 
 ## 快速开始
 
